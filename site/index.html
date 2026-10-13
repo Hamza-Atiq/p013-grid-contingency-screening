@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grid Outage Screening</title>
+<meta name="description" content="An AI ranks all 80 possible line failures on the IEEE 57-bus grid; the exact solver checks only the risky ones. Recorded results from the real model and solver.">
+<style>
+:root {
+  --bg: #f6f5f1; --panel: #ffffff; --ink: #1d1f23; --muted: #5d636d; --line: #d9d7d0;
+  --grid: #b9bcc2; --sent: #d98a1c; --danger: #c4372f; --safe: #2f7d5b; --accent: #1f5f9e;
+  --soft-danger: #fbe9e7; --soft-accent: #e8f0f8; --soft-warn: #fff4e2;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15171a; --panel: #1e2125; --ink: #e9eaec; --muted: #a2a8b1; --line: #33373d;
+    --grid: #4a4f57; --sent: #e5a23f; --danger: #ef6a5f; --safe: #5cc196; --accent: #6aa8e6;
+    --soft-danger: #3a2321; --soft-accent: #1d2a38; --soft-warn: #3a2f1c;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.wrap { max-width: 980px; margin: 0 auto; padding: 20px 16px 40px; }
+h1 { font-size: 26px; line-height: 1.25; margin: 0 0 6px; }
+.lede { margin: 0 0 4px; font-size: 16px; }
+.how { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
+.how b { color: var(--ink); }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+.main { display: grid; grid-template-columns: 1fr; gap: 14px; }
+@media (min-width: 900px) { .main { grid-template-columns: 56% 1fr; } }
+svg { width: 100%; height: auto; display: block; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+.legend i { display: inline-block; width: 18px; height: 0; border-top: 3px solid; vertical-align: middle; margin-right: 5px; }
+label { font-weight: 600; font-size: 14px; display: block; margin-bottom: 4px; }
+select { width: 100%; font: inherit; padding: 6px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--panel); color: var(--ink); }
+button { font: inherit; cursor: pointer; border-radius: 6px; }
+.run { width: 100%; margin: 10px 0 12px; padding: 9px; border: 0; background: var(--accent); color: #fff; font-weight: 600; }
+.run:focus-visible, .more:focus-visible, select:focus-visible { outline: 3px solid var(--sent); outline-offset: 2px; }
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tile { border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; }
+.tile .k { font-size: 12px; color: var(--muted); }
+.tile .v { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.tile .s { font-size: 12px; color: var(--muted); }
+.v.bad { color: var(--danger); }
+.phase { font-size: 13px; color: var(--muted); min-height: 20px; margin-top: 8px; }
+.callout { margin-top: 10px; padding: 9px 11px; border-radius: 6px; background: var(--soft-danger);
+  border-left: 4px solid var(--danger); font-size: 14px; }
+.callout[hidden] { display: none; }
+.time { margin: 14px 0 0; padding: 10px 12px; border-radius: 6px; background: var(--soft-accent); font-size: 14.5px; }
+.time small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 14px; }
+th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--line); padding: 5px 6px; }
+td { padding: 4px 6px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+td.num { text-align: right; }
+th.num { text-align: right; }
+tr.cut td { border-top: 2px dashed var(--muted); }
+tr.miss td { background: var(--soft-danger); font-weight: 600; }
+.tag { display: inline-block; padding: 0 6px; border-radius: 4px; font-size: 11.5px; font-weight: 700; letter-spacing: .02em; }
+.tag.d { background: var(--danger); color: #fff; }
+.tag.s { color: var(--safe); border: 1px solid var(--safe); }
+.tag.n { background: var(--soft-warn); color: var(--ink); border: 1px solid var(--sent); }
+.ok { color: var(--safe); font-weight: 700; }
+.x { color: var(--danger); font-weight: 700; }
+.more { margin-top: 8px; padding: 5px 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+.honest { margin-top: 18px; border-left: 4px solid var(--sent); }
+.honest h2, .links h2 { font-size: 16px; margin: 0 0 6px; }
+.honest ul { margin: 0; padding-left: 20px; }
+.honest li { margin: 3px 0; }
+.links { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px; }
+.links a { display: inline-block; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--panel); color: var(--accent); text-decoration: none; font-weight: 600; font-size: 14px; }
+.links a:hover { border-color: var(--accent); }
+.links a small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; }
+footer { margin-top: 18px; font-size: 12.5px; color: var(--muted); }
+.sr { position: absolute; left: -9999px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>If one power line fails, does anything overload?</h1>
+  <p class="lede">An AI ranks all 80 possible line failures on the IEEE 57-bus grid in about <span id="screen-s">0.15</span> s.
+    The exact solver then checks only the risky ones. <b>The AI sorts, the solver decides.</b></p>
+  <p class="how"><b>Try it:</b> pick a day, press Run. First you see which lines the AI sends to the solver,
+    then the solver's real answer for each, and whether any dangerous line slipped through.</p>
+
+  <div class="main">
+    <div class="panel">
+      <svg id="grid" viewBox="0 0 600 420" role="img" aria-label="The IEEE 57-bus grid: 57 buses and 80 lines"></svg>
+      <div class="legend" id="legend">
+        <span><i style="border-color:var(--grid)"></i>not sent</span>
+        <span><i style="border-color:var(--sent)"></i>sent to the solver</span>
+        <span><i style="border-color:var(--danger)"></i>dangerous, caught</span>
+        <span><i style="border-color:var(--danger);border-top-style:dashed"></i>dangerous, missed</span>
+        <span>&#9632; generator bus</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <label for="day">Pick a day</label>
+      <select id="day"></select>
+      <button class="run" id="run">Run screening</button>
+      <div class="tiles">
+        <div class="tile"><div class="k">Total load</div><div class="v" id="t-load">-</div><div class="s" id="t-load-s"></div></div>
+        <div class="tile"><div class="k">Sent to the solver</div><div class="v" id="t-sent">-</div><div class="s">of 80 lines</div></div>
+        <div class="tile"><div class="k">Dangerous (solver says)</div><div class="v" id="t-dang">-</div><div class="s">of 80 lines</div></div>
+        <div class="tile"><div class="k">Missed by the AI</div><div class="v" id="t-miss">-</div><div class="s">dangerous but not sent</div></div>
+      </div>
+      <div class="phase" id="phase" aria-live="polite">Press Run to start.</div>
+      <div class="callout" id="callout" hidden></div>
+    </div>
+  </div>
+
+  <div class="time" id="time" hidden></div>
+
+  <div id="tablebox"></div>
+
+  <div class="panel honest">
+    <h2>What these results do and do not show</h2>
+    <ul id="honest"></ul>
+  </div>
+
+  <div class="links" id="links"></div>
+
+  <footer>Recorded results: every result on this page (loads, scores, decisions, solver answers, times and counts) was produced by the trained model and the
+    pandapower Newton-Raphson solver, checked against the recorded run, and written into <code>data.js</code>.
+    This page only displays them.</footer>
+</div>
+
+<script src="data.js"></script>
+<script>
+"use strict";
+const D = window.P013;
+const $ = id => document.getElementById(id);
+const fmt = (x, d = 0) => Number(x).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+const SHOW = 20;
+let runToken = 0, showAll = false;
+
+/* ---------- the grid drawing ---------- */
+const W = 600, H = 420, M = 22;
+const busById = Object.fromEntries(D.buses.map(b => [b.id, b]));
+const px = b => M + b.x * (W - 2 * M), py = b => M + (1 - b.y) * (H - 2 * M);
+const svg = $("grid"), NS = "http://www.w3.org/2000/svg";
+const lineEl = {};
+for (const br of D.branches) {
+  const a = busById[br.a], b = busById[br.b];
+  const l = document.createElementNS(NS, "line");
+  l.setAttribute("x1", px(a)); l.setAttribute("y1", py(a));
+  l.setAttribute("x2", px(b)); l.setAttribute("y2", py(b));
+  l.setAttribute("stroke-linecap", "round");
+  const t = document.createElementNS(NS, "title"); l.appendChild(t);
+  svg.appendChild(l); lineEl[br.name] = l;
+}
+for (const b of D.buses) {
+  let n;
+  if (b.gen) {
+    n = document.createElementNS(NS, "rect");
+    n.setAttribute("x", px(b) - 4.5); n.setAttribute("y", py(b) - 4.5);
+    n.setAttribute("width", 9); n.setAttribute("height", 9);
+  } else {
+    n = document.createElementNS(NS, "circle");
+    n.setAttribute("cx", px(b)); n.setAttribute("cy", py(b)); n.setAttribute("r", 3.2);
+  }
+  n.setAttribute("fill", "var(--ink)");
+  const t = document.createElementNS(NS, "title"); t.textContent = "Bus " + b.id + (b.gen ? " (generator)" : "");
+  n.appendChild(t); svg.appendChild(n);
+}
+function paint(name, colour, width, dashed, tip) {
+  const l = lineEl[name];
+  l.setAttribute("stroke", colour); l.setAttribute("stroke-width", width);
+  if (dashed) l.setAttribute("stroke-dasharray", "6 4"); else l.removeAttribute("stroke-dasharray");
+  l.firstChild.textContent = tip;
+}
+function resetGrid() {
+  for (const br of D.branches) paint(br.name, "var(--grid)", 1.6, false, br.name + ": bus " + br.a + " to " + br.b);
+}
+
+/* ---------- the day list ---------- */
+const sel = $("day");
+const groups = [["fixed", "Test days (" + D.honest.fixedExamDays + " unseen days, one fixed policy)"], ["missed", "Days it missed (other tests, see below)"]];
+for (const [g, label] of groups) {
+  const og = document.createElement("optgroup"); og.label = label;
+  D.days.forEach((d, i) => {
+    if (d.group !== g) return;
+    const o = document.createElement("option"); o.value = i; o.textContent = d.label; og.appendChild(o);
+  });
+  sel.appendChild(og);
+}
+// Start on a typical quiet day: the median number sent among quiet days.
+const quiet = D.days.map((d, i) => [d, i]).filter(([d]) => d.group === "fixed" && d.label.endsWith("quiet day"))
+  .sort((a, b) => a[0].nSent - b[0].nSent);
+if (quiet.length) sel.value = quiet[Math.floor(quiet.length / 2)][1];
+
+/* ---------- one run ---------- */
+function tip(r) {
+  const s = r.pinned ? "could not be solved" : "AI score " + fmt(r.score, 3);
+  return r.name + ": " + s + ", " + (r.sent ? "sent" : "not sent") + ", solver says " + (r.dangerous ? "dangerous" : "safe");
+}
+function stats(d, phase) {
+  $("t-load").textContent = fmt(d.loadMw) + " MW";
+  $("t-load-s").textContent = d.heavy ? "heavy day: all 80 sent" : "normal day";
+  $("t-sent").textContent = d.nSent;
+  $("t-dang").textContent = phase === "solver" ? d.nDangerous : "?";
+  const m = $("t-miss");
+  m.textContent = phase === "solver" ? (d.missed.length ? d.missed.join(", ") : "none") : "?";
+  m.classList.toggle("bad", phase === "solver" && d.missed.length > 0);
+}
+function callout(d) {
+  const c = $("callout");
+  if (!d.missNote) { c.hidden = true; return; }
+  c.hidden = false;
+  c.innerHTML = d.missNote.map(m =>
+    "<b>Missed: " + m.name + ".</b> The AI scored it " + fmt(m.score, 3) + ", " + fmt(m.cutoff - m.score, 3) +
+    " below the cutoff of " + fmt(m.cutoff, 3) + " that this test's policy had learned (test " + m.examNo +
+    " of " + D.honest.nExams + "). That policy counted days from " + fmt(m.L) + " MW as heavy, so this " + fmt(d.loadMw) +
+    " MW day was a normal day for it. This day is not one of the 175 days above; it comes from one of " +
+    "the 50 reshuffled tests.").join("<br>");
+}
+function timeLine(d) {
+  const t = $("time"); t.hidden = false;
+  const gain = d.speedup > 1.05 ? "About " + fmt(d.speedup, 1) + " times faster."
+    : "No gain today: slightly slower, because the AI screen still runs.";
+  t.innerHTML = "<b>All 80 solved: " + fmt(d.allSeconds, 1) + " s. AI screen + " + d.nSent + " sent cases: " +
+    fmt(d.screenSeconds, 1) + " s. " + gain + "</b>" +
+    "<small>Estimated from laptop medians (" + fmt(D.timing.solve, 3) + " s per solve, " +
+    fmt(D.timing.overhead, 3) + " s per AI screen), not timed live for this day. " +
+    (d.heavy ? "Heavy days send all 80, so they gain nothing; the speed comes from normal days." : "") + "</small>";
+}
+function table(d) {
+  const rows = d.rows;
+  const visible = showAll ? rows : rows.filter((r, i) => i < SHOW || (r.dangerous && !r.sent));
+  const firstUnsent = rows.findIndex(r => !r.sent);
+  let h = "<table><caption class='sr'>All 80 possible line failures for this day</caption><thead><tr>" +
+    "<th>#</th><th>Line</th><th class='num'>AI danger score</th><th>Sent to solver</th><th>Solver says</th><th>Result</th></tr></thead><tbody>";
+  for (const r of visible) {
+    const i = rows.indexOf(r);
+    const missed = r.dangerous && !r.sent;
+    const cls = [missed ? "miss" : "", (!d.heavy && i === firstUnsent) ? "cut" : ""].join(" ").trim();
+    h += "<tr" + (cls ? " class='" + cls + "'" : "") + "><td>" + (i + 1) + "</td><td>" + r.name + "</td>" +
+      "<td class='num'>" + (r.pinned ? "<span class='tag n'>NOT ASKED</span>" : fmt(r.score, 3)) + "</td>" +
+      "<td>" + (r.sent ? "yes" : "no") + "</td>" +
+      "<td>" + (r.pinned ? "<span class='tag d'>NO SOLUTION</span>" : r.dangerous ? "<span class='tag d'>DANGEROUS</span>" : "<span class='tag s'>safe</span>") + "</td>" +
+      "<td>" + (missed ? "<span class='x'>&#10007; missed</span>" : r.dangerous ? "<span class='ok'>&#10003; caught</span>" : "") + "</td></tr>";
+  }
+  h += "</tbody></table>";
+  h += "<p style='font-size:12.5px;color:var(--muted);margin:6px 0 0'>Order: lines that could not be solved first (they always go to the solver), " +
+    "then by AI danger score, highest first. An AI score of 1.0 or more means the AI predicts danger; the solver's answer is what counts. " +
+    (d.heavy ? "Heavy day: every line is sent." : "The dashed line is this day's cutoff (" + fmt(d.cutoff, 3) + "): lines below it are not sent.") + "</p>";
+  if (rows.length > SHOW) h += "<button class='more' id='more'>" + (showAll ? "Show the top 20" : "Show all 80 lines") + "</button>";
+  $("tablebox").innerHTML = h;
+  const more = $("more");
+  if (more) more.onclick = () => { showAll = !showAll; table(d); };
+}
+function run() {
+  const token = ++runToken;            // the newest click wins
+  const d = D.days[+sel.value];
+  resetGrid(); $("time").hidden = true; $("tablebox").innerHTML = ""; callout({});
+  stats(d, "model");
+  for (const r of d.rows) paint(r.name, r.sent ? "var(--sent)" : "var(--grid)", r.sent ? 3 : 1.6, false, tip(r));
+  $("phase").textContent = "Step 1 of 2: the AI ranked all 80 and sent " + d.nSent + " to the solver (orange).";
+  setTimeout(() => {
+    if (token !== runToken) return;
+    for (const r of d.rows) {
+      if (r.dangerous && !r.sent) paint(r.name, "var(--danger)", 4, true, tip(r));
+      else if (r.dangerous) paint(r.name, "var(--danger)", 3.2, false, tip(r));
+      else if (r.sent) paint(r.name, "var(--sent)", 2.4, false, tip(r));
+    }
+    stats(d, "solver"); callout(d); timeLine(d); table(d);
+    $("phase").textContent = "Step 2 of 2: the solver checked the " + d.nSent + " sent lines. " +
+      (d.missed.length ? "Dangerous line missed: " + d.missed.join(", ") + "." : "Every dangerous line was caught.");
+  }, 700);
+}
+$("run").onclick = run;
+sel.onchange = () => { showAll = false; run(); };
+
+/* ---------- honest box and links ---------- */
+const hb = D.honest;
+document.getElementById("screen-s").textContent = fmt(D.timing.overhead, 2);
+$("honest").innerHTML = [
+  "These are <b>recorded results</b> from the real model and solver, not a simulation of them.",
+  "On the fixed test above the AI missed nothing: <b>" + hb.fixedMissDays + " of " + hb.fixedExamDays + " days</b> had a missed dangerous line.",
+  "But over <b>" + hb.nExams + " reshuffled tests</b> my pass mark was <b>not reached</b>: zero misses on " + hb.zeroMiss +
+    " of " + hb.nExams + " tests, and I needed " + hb.passNeeded + ". Those " + hb.missDays + " miss-days are only <b>" +
+    hb.distinctMissDays + " different days</b>, listed under \"Days it missed\".",
+  "I show policy P2 because it did best. The selection rule I registered in advance picked a different policy, which reached " +
+    hb.registeredZeroMiss + " of " + hb.nExams + ".",
+  "One grid (IEEE 57-bus), synthetic operating days, single line failures only.",
+  "Next, with supervision: every miss is a voltage drop the model under-predicts on a few specific lines. I would study why, and fix it."
+].map(s => "<li>" + s + "</li>").join("");
+$("links").innerHTML =
+  "<a href='" + D.links.live + "'>Run it live<small>Google Colab: real model and solver on a new day. Press Run all; about a minute.</small></a>" +
+  "<a href='" + D.links.github + "'>Code and full write-up<small>GitHub: README, tests, how every number was made</small></a>" +
+  "<a href='" + D.links.results + "'>Full results<small>All 50 tests one by one, every missed case</small></a>";
+
+resetGrid();
+run();
+</script>
+</body>
+</html>

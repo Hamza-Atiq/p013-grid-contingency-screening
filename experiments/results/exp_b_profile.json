@@ -1,0 +1,381 @@
+{
+ "profile": {
+  "label": "INDICATIVE - shared machine, 3 other agents running",
+  "environment": {
+   "python": "3.11.9",
+   "numpy": "2.4.6",
+   "cpu_count": 4,
+   "thread_env": {
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1"
+   }
+  },
+  "points": [
+   0,
+   1,
+   2,
+   3,
+   5,
+   7
+  ],
+  "repeats": 3,
+  "original": {
+   "segments": {
+    "template.fresh": {
+     "median_s": 0.00032,
+     "share_of_segment_total": 0.0006,
+     "min_s": 0.00027,
+     "max_s": 0.00169
+    },
+    "apply_operating_point": {
+     "median_s": 0.00012,
+     "share_of_segment_total": 0.0002,
+     "min_s": 8e-05,
+     "max_s": 0.00081
+    },
+    "islanding_prefilter": {
+     "median_s": 0.01383,
+     "share_of_segment_total": 0.0242,
+     "min_s": 0.00929,
+     "max_s": 0.0364
+    },
+    "bus_features": {
+     "median_s": 0.00066,
+     "share_of_segment_total": 0.0011,
+     "min_s": 0.00044,
+     "max_s": 0.00122
+    },
+    "branch_features_x81_and_edge_index": {
+     "median_s": 0.00386,
+     "share_of_segment_total": 0.0067,
+     "min_s": 0.00257,
+     "max_s": 0.01009
+    },
+    "forward_pass": {
+     "median_s": 0.46535,
+     "share_of_segment_total": 0.8133,
+     "min_s": 0.37522,
+     "max_s": 0.61795
+    },
+    "loading_percent_x80": {
+     "median_s": 0.06742,
+     "share_of_segment_total": 0.1178,
+     "min_s": 0.04865,
+     "max_s": 0.10307
+    },
+    "risk_score_and_violations_x80": {
+     "median_s": 0.00731,
+     "share_of_segment_total": 0.0128,
+     "min_s": 0.0045,
+     "max_s": 0.01188
+    },
+    "sort_and_loop_bookkeeping": {
+     "median_s": 0.0006,
+     "share_of_segment_total": 0.0011,
+     "min_s": 0.00038,
+     "max_s": 0.00123
+    }
+   },
+   "segment_total": {
+    "median_s": 0.57214,
+    "min_s": 0.44533,
+    "max_s": 0.74357,
+    "n": 18
+   },
+   "whole_call": {
+    "median_s": 0.62733,
+    "min_s": 0.44922,
+    "max_s": 0.85027,
+    "n": 18
+   }
+  },
+  "fast": {
+   "segments": {
+    "template.fresh": {
+     "median_s": 0.00032,
+     "share_of_segment_total": 0.0017,
+     "min_s": 0.00027,
+     "max_s": 0.00054
+    },
+    "apply_operating_point": {
+     "median_s": 9e-05,
+     "share_of_segment_total": 0.0005,
+     "min_s": 8e-05,
+     "max_s": 0.00025
+    },
+    "islanding_prefilter": {
+     "median_s": 0.00079,
+     "share_of_segment_total": 0.0042,
+     "min_s": 0.00048,
+     "max_s": 0.00179
+    },
+    "bus_features": {
+     "median_s": 0.00012,
+     "share_of_segment_total": 0.0006,
+     "min_s": 8e-05,
+     "max_s": 0.00073
+    },
+    "branch_features_x81_and_edge_index": {
+     "median_s": 4e-05,
+     "share_of_segment_total": 0.0002,
+     "min_s": 3e-05,
+     "max_s": 8e-05
+    },
+    "forward_pass": {
+     "median_s": 0.17774,
+     "share_of_segment_total": 0.9423,
+     "min_s": 0.15222,
+     "max_s": 0.3855
+    },
+    "loading_percent_x80": {
+     "median_s": 0.0018,
+     "share_of_segment_total": 0.0095,
+     "min_s": 0.00108,
+     "max_s": 0.01034
+    },
+    "risk_score_and_violations_x80": {
+     "median_s": 0.00017,
+     "share_of_segment_total": 0.0009,
+     "min_s": 0.0001,
+     "max_s": 0.00036
+    },
+    "sort_and_loop_bookkeeping": {
+     "median_s": 0.00738,
+     "share_of_segment_total": 0.0391,
+     "min_s": 0.00738,
+     "max_s": 0.00738
+    }
+   },
+   "segment_total": {
+    "median_s": 0.18862,
+    "min_s": 0.16196,
+    "max_s": 0.39767,
+    "n": 18
+   },
+   "whole_call": {
+    "median_s": 0.18843,
+    "min_s": 0.14721,
+    "max_s": 0.27884,
+    "n": 18
+   }
+  },
+  "ratio_fast_over_original_whole_call_medians": 0.3004,
+  "noise_note": "min/max spread of the whole-call time across repeats shows how noisy the machine was; shares are more trustworthy than seconds",
+  "cprofile_original_top15_tottime": [
+   "         358549 function calls (356269 primitive calls) in 3.557 seconds",
+   "",
+   "   Ordered by: internal time",
+   "   List reduced from 255 to 15 due to restriction <15>",
+   "",
+   "   ncalls  tottime  percall  cumtime  percall filename:lineno(function)",
+   "      120    0.942    0.008    1.437    0.012 D:\\USA Journey\\Email tracker\\projects\\P-013-power-flow-surrogate\\build\\src\\p013\\forward_numpy.py:38(_mlp)",
+   "       72    0.622    0.009    0.622    0.009 {method 'at' of 'numpy.ufunc' objects}",
+   "      120    0.495    0.004    0.495    0.004 D:\\USA Journey\\Email tracker\\projects\\P-013-power-flow-surrogate\\build\\src\\p013\\forward_numpy.py:34(_silu)",
+   "        6    0.443    0.074    2.520    0.420 D:\\USA Journey\\Email tracker\\projects\\P-013-power-flow-surrogate\\build\\src\\p013\\forward_numpy.py:59(forward)",
+   "      465    0.422    0.001    0.500    0.001 D:\\USA Journey\\Email tracker\\projects\\P-013-power-flow-surrogate\\build\\src\\p013\\admittance.py:206(branch_flows)",
+   "      486    0.108    0.000    0.143    0.000 D:\\USA Journey\\Email tracker\\projects\\P-013-power-flow-surrogate\\build\\src\\p013\\topology.py:78(_groups)",
+   "     1860    0.050    0.000    0.051    0.000 D:\\USA Journey\\Email tracker\\projects\\P-013-power-flow-surrogate\\build\\src\\p013\\danger.py:101(excess)",
+   "     1887    0.040    0.000    0.087    0.000 D:\\USA Journey\\Email tracker\\projects\\P-013-power-flow-surrogate\\build\\src\\p013\\admittance.py:44(canonical_branch_rows)",
+   "       18    0.037    0.002    0.039    0.002 D:\\USA Journey\\Email tracker\\projects\\P-013-power-flow-surrogate\\build\\src\\p013\\dataset.py:68(to_bus_order)",
+   "      501    0.026    0.000    0.026    0.000 D:\\USA Journey\\Email tracker\\projects\\P-013-power-flow-surrogate\\build\\src\\p013\\admittance.py:41(<dictcomp>)",
+   "      486    0.024    0.000    0.052    0.000 D:\\USA Journey\\Email tracker\\projects\\P-013-power-flow-surrogate\\build\\src\\p013\\features.py:120(branch_features)",
+   "        6    0.024    0.004    3.271    0.545 D:\\USA Journey\\Email tracker\\projects\\P-013-power-flow-surrogate\\build\\src\\p013\\evaluate.py:282(model_ranking)",
+   "   105477    0.020    0.000    0.020    0.000 {method 'append' of 'list' objects}",
+   "      480    0.017    0.000    0.017    0.000 D:\\USA Journey\\Email tracker\\projects\\P-013-power-flow-surrogate\\build\\src\\p013\\topology.py:136(<listcomp>)",
+   "       36    0.016    0.000    0.016    0.000 D:\\USA Journey\\Email tracker\\projects\\P-013-power-flow-surrogate\\build\\.venv\\Lib\\site-packages\\numpy\\_core\\numeric.py:97(zeros_like)",
+   "",
+   ""
+  ]
+ },
+ "parity": {
+  "0-125": {
+   "points": [
+    0,
+    125
+   ],
+   "n_points": 125,
+   "orderings_identical": 125,
+   "pinned_identical": 125,
+   "reports_identical": 125,
+   "points_with_every_score_bit_identical": 125,
+   "max_abs_score_difference": 0.0,
+   "islanding_identical": 125,
+   "failures": [],
+   "passed": true,
+   "seconds": 79.0,
+   "environment": {
+    "python": "3.11.9",
+    "numpy": "2.4.6",
+    "cpu_count": 4,
+    "thread_env": {
+     "OMP_NUM_THREADS": "1",
+     "MKL_NUM_THREADS": "1",
+     "OPENBLAS_NUM_THREADS": "1"
+    }
+   }
+  },
+  "125-250": {
+   "points": [
+    125,
+    250
+   ],
+   "n_points": 125,
+   "orderings_identical": 125,
+   "pinned_identical": 125,
+   "reports_identical": 125,
+   "points_with_every_score_bit_identical": 125,
+   "max_abs_score_difference": 0.0,
+   "islanding_identical": 125,
+   "failures": [],
+   "passed": true,
+   "seconds": 75.9,
+   "environment": {
+    "python": "3.11.9",
+    "numpy": "2.4.6",
+    "cpu_count": 4,
+    "thread_env": {
+     "OMP_NUM_THREADS": "1",
+     "MKL_NUM_THREADS": "1",
+     "OPENBLAS_NUM_THREADS": "1"
+    }
+   }
+  },
+  "0-250": {
+   "points": [
+    0,
+    250
+   ],
+   "n_points": 250,
+   "orderings_identical": 250,
+   "pinned_identical": 250,
+   "reports_identical": 250,
+   "points_with_every_score_bit_identical": 250,
+   "max_abs_score_difference": 0.0,
+   "islanding_identical": 250,
+   "failures": [],
+   "passed": true,
+   "seconds": 157.1,
+   "environment": {
+    "python": "3.11.9",
+    "numpy": "2.4.6",
+    "cpu_count": 4,
+    "thread_env": {
+     "OMP_NUM_THREADS": "1",
+     "MKL_NUM_THREADS": "1",
+     "OPENBLAS_NUM_THREADS": "1"
+    }
+   }
+  },
+  "summary": {
+   "points_covered_and_passed": 250,
+   "all_points_passed": true,
+   "max_abs_score_difference": 0.0
+  }
+ },
+ "smoke_clean_timing_on_shared_machine": {
+  "label": "INDICATIVE - smoke run of --clean-timing on the shared machine, NOT the clean number",
+  "environment": {
+   "python": "3.11.9",
+   "numpy": "2.4.6",
+   "cpu_count": 4,
+   "thread_env": {
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1"
+   }
+  },
+  "points": [
+   0,
+   1,
+   2,
+   3,
+   5
+  ],
+  "repeats_per_point": 3,
+  "orderings_identical_on_timed_points": true,
+  "mismatched_points": [],
+  "original_overhead_s": {
+   "median_s": 0.42794,
+   "min_s": 0.41672,
+   "max_s": 0.59013,
+   "n": 5
+  },
+  "fast_overhead_s": {
+   "median_s": 0.13902,
+   "min_s": 0.13284,
+   "max_s": 0.19146,
+   "n": 5
+  },
+  "solve_s_from_results_json": 0.05007,
+  "original_overhead_in_solves": 8.55,
+  "fast_overhead_in_solves": 2.78,
+  "speedup_of_overhead": 3.08,
+  "gate_fast_overhead_below_5_solves": true,
+  "ceiling_speedup_at_k26_original": 2.316,
+  "ceiling_speedup_at_k26_fast": 2.78,
+  "cross_check_solve_s_measured_now": {
+   "median_s": 0.04639,
+   "n": 20,
+   "fast_overhead_in_these_solves": 3.0,
+   "note": "one contingency solve including fresh/apply/take-out setup, same process and load as the overhead timings; use it to judge whether results.json's 0.0501 s still describes this machine"
+  },
+  "reference_eval_notes_overhead_s": 0.6257,
+  "reference_note": "EVAL_NOTES' 0.626 s is DERIVED: screen median minus 72 x the baseline's per-solve time, from two separate medians over 5 points. The overhead here is timed DIRECTLY, so the two need not agree."
+ },
+ "clean_timing": {
+  "label": "CLEAN: orchestrator, idle machine, 2026-09-17",
+  "environment": {
+   "python": "3.11.9",
+   "numpy": "2.4.6",
+   "cpu_count": 4,
+   "thread_env": {
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1"
+   }
+  },
+  "points": [
+   0,
+   1,
+   2,
+   3,
+   5,
+   7,
+   9,
+   10,
+   11,
+   12
+  ],
+  "repeats_per_point": 5,
+  "orderings_identical_on_timed_points": true,
+  "mismatched_points": [],
+  "original_overhead_s": {
+   "median_s": 0.48088,
+   "min_s": 0.44537,
+   "max_s": 0.54736,
+   "n": 10
+  },
+  "fast_overhead_s": {
+   "median_s": 0.14868,
+   "min_s": 0.13673,
+   "max_s": 0.17087,
+   "n": 10
+  },
+  "solve_s_from_results_json": 0.05007,
+  "original_overhead_in_solves": 9.6,
+  "fast_overhead_in_solves": 2.97,
+  "speedup_of_overhead": 3.23,
+  "gate_fast_overhead_below_5_solves": true,
+  "ceiling_speedup_at_k26_original": 2.247,
+  "ceiling_speedup_at_k26_fast": 2.762,
+  "cross_check_solve_s_measured_now": {
+   "median_s": 0.05122,
+   "n": 80,
+   "fast_overhead_in_these_solves": 2.9,
+   "note": "one contingency solve including fresh/apply/take-out setup, same process and load as the overhead timings; use it to judge whether results.json's 0.0501 s still describes this machine"
+  },
+  "reference_eval_notes_overhead_s": 0.6257,
+  "reference_note": "EVAL_NOTES' 0.626 s is DERIVED: screen median minus 72 x the baseline's per-solve time, from two separate medians over 5 points. The overhead here is timed DIRECTLY, so the two need not agree."
+ }
+}

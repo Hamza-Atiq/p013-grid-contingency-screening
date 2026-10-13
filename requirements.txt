@@ -1,0 +1,25 @@
+# P-013 pinned environment.
+#
+# These are the exact versions every measured number in SPEC.md was produced on
+# (Python 3.11.9, Intel i5-6300U, no GPU). SPEC 1.5: the project runs in its own
+# virtualenv, never in base conda, which on this machine is already broken.
+#
+# numba is NOT optional: it is a measured 1.8x on solve time (43 ms against
+# 78 ms), which is the difference between 29 and 52 minutes of data generation.
+
+pandapower==3.5.4
+numpy==2.4.6
+numba==0.67.0
+
+# Pinned because pandapower's results depend on them, not because we import
+# them directly.
+networkx==3.6.1
+pandas==2.3.3
+scipy==1.16.3
+
+pytest==8.4.2
+
+# CPU-only build. There is no GPU on the target machine, and the CUDA wheel is
+# roughly ten times the size for no benefit. Install with:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch==2.14.0+cpu

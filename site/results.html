@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grid contingency screening</title>
+<style>
+/* ISA-101 style: the field is grey, and colour only ever means something is wrong. */
+:root{
+  --ground:#c2c2ba; --panel:#cdcdc5; --sunk:#b0b0a8;
+  --hi:#deded6; --lo:#93938d;
+  --ink:#1c1e20; --ink2:#4d5053; --ink3:#5f6266;
+  --alarm:#a92419; --warn:#8a5a06; --select:#2f5f80; --ok:#3d5a3d;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,"DejaVu Sans Mono",monospace;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font:15px/1.55 var(--sans)}
+.wrap{max-width:980px;margin:0 auto;padding:24px 16px 60px}
+h1{font-size:23px;margin:0 0 4px;letter-spacing:-.2px}
+h2{font-size:17px;margin:0 0 10px;letter-spacing:-.1px}
+.sub{color:var(--ink2);margin:0 0 22px;font-size:14px}
+.panel{background:var(--panel);border-top:1px solid var(--hi);border-left:1px solid var(--hi);
+  border-right:1px solid var(--lo);border-bottom:1px solid var(--lo);padding:18px;margin:0 0 20px}
+.lead{margin:0 0 12px;font-size:14px;color:var(--ink2)}
+.note{font-size:13px;color:var(--ink3);margin:10px 0 0}
+b.n{font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums}
+.alarm{color:var(--alarm)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--sunk)}
+th{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);font-weight:600}
+td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.scroll{overflow-x:auto}
+
+.readout{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--lo)}
+.cell{background:var(--sunk);padding:11px 13px;min-width:0}
+.cell span{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink2);margin-bottom:5px}
+.cell b.n{font-size:20px}
+.cell.big b.n{font-size:28px}
+.cell small{display:block;font-size:12px;color:var(--ink3);margin-top:3px}
+.verdict{margin-top:14px;padding:11px 13px;background:var(--sunk);font-size:14px;border-left:3px solid var(--select)}
+.verdict.bad{border-left-color:var(--alarm)}
+@media (max-width:760px){.readout{grid-template-columns:repeat(2,1fr)}}
+
+/* the 50 exams */
+.exams{display:flex;align-items:flex-end;gap:2px;height:96px;background:var(--sunk);padding:8px 8px 0}
+.exams button{flex:1 1 0;min-width:0;height:100%;border:0;padding:0;background:transparent;cursor:pointer;
+  display:flex;align-items:flex-end;border-bottom:3px solid transparent}
+.exams button i{display:block;width:100%;background:var(--lo)}
+.exams button.miss i{background:var(--alarm)}
+.exams button[aria-pressed=true]{border-bottom:6px solid var(--ink);background:rgba(47,95,128,.28);
+  outline:2px solid var(--ink);outline-offset:1px}
+.exams button:focus-visible{outline:2px dashed var(--select);outline-offset:3px}
+.axis{display:flex;justify-content:space-between;font:12px var(--mono);color:var(--ink3);padding:4px 8px 0}
+
+/* day picker */
+.tabs{display:flex;flex-wrap:wrap;gap:1px;background:var(--lo);margin-bottom:16px}
+.tabs button{flex:1 1 auto;background:var(--sunk);border:0;color:var(--ink2);font:600 12.5px/1.35 var(--sans);
+  padding:9px 10px;cursor:pointer;text-align:left}
+.tabs button[aria-selected=true]{background:var(--select);color:#f2f2ec}
+.tabs button:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
+tr.dang td{background:rgba(169,36,25,.13)}
+tr.missrow td{background:rgba(169,36,25,.32);font-weight:600}
+tr.notsent td{color:var(--ink3)}
+tr.missrow td{color:var(--ink)}
+tr.line td{border-top:2px dashed var(--ink2)}
+.tag{font:600 10px/1 var(--sans);text-transform:uppercase;letter-spacing:.05em;padding:2px 5px;
+  background:var(--alarm);color:#f2f2ec;border-radius:2px;white-space:nowrap}
+.tag.pin{background:var(--warn)}
+.btn{background:var(--sunk);border:1px solid var(--lo);font:600 13px var(--sans);color:var(--ink);
+  padding:6px 12px;cursor:pointer;margin-top:10px}
+.btn:focus-visible{outline:2px solid var(--select)}
+ul.misses{margin:8px 0 0;padding-left:20px;font-size:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Grid contingency screening: the measured result</h1>
+<p class="sub">
+  A graph neural network ranks every single-branch outage on the
+  <b class="n" id="caseName"></b> grid, and the AC power flow solver checks the
+  cases that need checking. Every number on this page comes from the trained
+  model and the solver, written in when this file was built.
+</p>
+
+<div class="panel">
+  <h2>The honest headline</h2>
+  <p class="lead">
+    Tested on <b class="n" id="hExams"></b> random exams: each time,
+    <b class="n" id="hPrac"></b> practice days to fit the policy and
+    <b class="n" id="hExamDays"></b> unseen exam days to grade it,
+    <b class="n" id="hTotalDays"></b> exam days in total.
+  </p>
+  <div class="readout">
+    <div class="cell big"><span>Speed vs solving all</span><b class="n" id="hSpeed"></b><small>median over the exams</small></div>
+    <div class="cell big"><span>Cases sent to solver</span><b class="n" id="hSent"></b><small id="hSentOf"></small></div>
+    <div class="cell big"><span>Days with a miss</span><b class="n alarm" id="hMiss"></b><small id="hMissRate"></small></div>
+    <div class="cell big"><span>Worst recall</span><b class="n" id="hRecall"></b><small>in any one exam</small></div>
+  </div>
+  <div class="verdict bad" id="hVerdict"></div>
+</div>
+
+<div class="panel">
+  <h2>The 50 exams, one bar each</h2>
+  <p class="lead">
+    Bar height is the number of exam days with at least one dangerous case not
+    sent to the solver. Grey stubs are exams with zero misses. Click a bar (or
+    use the arrow keys on it) to see that exam.
+  </p>
+  <div class="exams" id="exams" role="group" aria-label="Exams"></div>
+  <div class="axis"><span>exam 1</span><span id="axisEnd"></span></div>
+  <p class="note" id="eRepeat"></p>
+  <div class="readout" style="margin-top:14px">
+    <div class="cell"><span>Exam</span><b class="n" id="eNo"></b></div>
+    <div class="cell"><span>Days with a miss</span><b class="n" id="eMiss"></b></div>
+    <div class="cell"><span>Recall</span><b class="n" id="eRecall"></b></div>
+    <div class="cell"><span>Speed vs solving all</span><b class="n" id="eSpeed"></b></div>
+  </div>
+  <div class="verdict" id="eVerdict"></div>
+</div>
+
+<div class="panel">
+  <h2>Look at one day</h2>
+  <p class="lead">
+    The first four days come from one exam (<b class="n" id="fxExam"></b> exam days,
+    policy fitted on <b class="n" id="fxPrac"></b> practice days), the last from an
+    exam where it failed. Rows are the 80 branches in the model's order. Red rows
+    are dangerous by the solver's answer (a danger score above 1.0). On a normal
+    day the dashed line is the cutoff: rows below it are not sent to the solver.
+  </p>
+  <div class="tabs" id="tabs" role="tablist"></div>
+  <div class="readout" style="margin-bottom:4px">
+    <div class="cell"><span>System load</span><b class="n" id="dLoad"></b><small id="dHeavy"></small></div>
+    <div class="cell"><span>Sent to solver</span><b class="n" id="dSent"></b><small id="dPinned"></small></div>
+    <div class="cell"><span>Dangerous (solver)</span><b class="n" id="dDang"></b></div>
+    <div class="cell"><span>Missed</span><b class="n" id="dMissed"></b></div>
+  </div>
+  <div class="verdict" id="dVerdict"></div>
+  <div class="scroll" style="margin-top:14px"><table><thead><tr>
+    <th class="num">#</th><th>Branch</th><th class="num">Model score</th><th>Solver says</th><th>Sent to solver</th>
+  </tr></thead><tbody id="dBody"></tbody></table></div>
+  <button class="btn" id="dMore" type="button"></button>
+</div>
+
+<div class="panel">
+  <h2>The three policies I compared</h2>
+  <p class="lead">
+    Same 50 exams for each. The pass mark, fixed before the test: zero misses on
+    at least <b class="n" id="pNeed"></b> of 50 exams and a median speed of at
+    least <b class="n" id="pNeedSpeed"></b>. No row reaches it.
+  </p>
+  <div class="scroll"><table><thead><tr>
+    <th>Policy</th><th class="num">Zero-miss exams</th><th class="num">Miss days</th>
+    <th class="num">Worst recall</th><th class="num">Cases sent</th><th class="num">Speed</th>
+  </tr></thead><tbody id="pBody"></tbody></table></div>
+  <p class="note">
+    Cases sent and speed are medians over the 50 exams. Miss days are summed
+    over all 50 exams.
+  </p>
+</div>
+
+<div class="panel">
+  <h2>How the speed is counted</h2>
+  <p style="margin:0;font-size:14px">
+    One AC power flow solve takes <b class="n" id="tSolve"></b> on my laptop
+    (median), so solving all <b class="n" id="tN"></b> cases takes
+    <b class="n" id="tAll"></b>. Running the model screen takes
+    <b class="n" id="tOver"></b> (median). A day costs the screen plus one solve per case
+    sent to the solver. Heavy days send all 80, so they pay the screen and gain
+    nothing; the speed comes from normal days.
+  </p>
+</div>
+
+<div class="panel">
+  <h2>How accurate the model is</h2>
+  <div class="scroll"><table><thead><tr>
+    <th>Quantity (mean absolute error)</th><th class="num">All cases</th><th class="num">Dangerous cases only</th>
+  </tr></thead><tbody id="accBody"></tbody></table></div>
+  <p class="note" id="accNote"></p>
+</div>
+
+<p class="note" id="stamp"></p>
+
+</div>
+<script>
+const DATA = {"generated":"2026-10-13 17:24","case":"pglib_opf_case57_ieee","n":80,"nExams":50,"nExamDays":175,"nPractice":575,"poolDays":750,"passNeeded":48,"passSpeed":2.0,"headline":{"zeroMiss":39,"missDays":14,"worstRecall":0.9990829894543787,"meanSent":32.69428571428571,"speedup":2.247,"speedupP10P90":[2.038,2.461],"registeredZeroMiss":31},"timing":{"solve":0.05122,"overhead":0.14868,"baseline":4.0976},"exams":[{"no":1,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":33.57714285714286,"speedup":2.192987553171722,"L":1268.9,"percentile":70,"cutoff":0.7701,"heavyPractice":173,"misses":[]},{"no":2,"missDays":2,"missedCases":2,"recall":0.99909338168631,"meanSent":29.982857142857142,"speedup":2.432673517966563,"L":1276.4,"percentile":70,"cutoff":0.8226,"heavyPractice":173,"misses":[{"day":[1,52],"loadMw":1224.7,"heavy":false,"branches":["L48"],"scores":[0.8055]},{"day":[1,90],"loadMw":1238.7,"heavy":false,"branches":["L48"],"scores":[0.8189]}]},{"no":3,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":33.12,"speedup":2.2208174099597717,"L":1271.9,"percentile":70,"cutoff":0.7667,"heavyPractice":173,"misses":[]},{"no":4,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":32.074285714285715,"speedup":2.2872135170019248,"L":1274.2,"percentile":70,"cutoff":0.7899,"heavyPractice":173,"misses":[]},{"no":5,"missDays":1,"missedCases":1,"recall":0.9995523724261415,"meanSent":32.371428571428574,"speedup":2.2679464849644333,"L":1272.7,"percentile":70,"cutoff":0.809,"heavyPractice":173,"misses":[{"day":[1,52],"loadMw":1224.7,"heavy":false,"branches":["L48"],"scores":[0.8028]}]},{"no":6,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":32.93142857142857,"speedup":2.232504086396551,"L":1271.9,"percentile":70,"cutoff":0.7869,"heavyPractice":173,"misses":[]},{"no":7,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":30.81142857142857,"speedup":2.372887323524199,"L":1275.9,"percentile":70,"cutoff":0.7815,"heavyPractice":173,"misses":[]},{"no":8,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":35.502857142857145,"speedup":2.0830279583206175,"L":1262.6,"percentile":70,"cutoff":0.7945,"heavyPractice":173,"misses":[]},{"no":9,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":36.8,"speedup":2.0149726393309124,"L":1258.8,"percentile":70,"cutoff":0.7991,"heavyPractice":173,"misses":[]},{"no":10,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":38.70857142857143,"speedup":1.9225526677764215,"L":1250.8,"percentile":70,"cutoff":0.7939,"heavyPractice":173,"misses":[]},{"no":11,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":32.25142857142857,"speedup":2.2756881935234983,"L":1274.2,"percentile":70,"cutoff":0.7789,"heavyPractice":173,"misses":[]},{"no":12,"missDays":2,"missedCases":2,"recall":0.9990884229717412,"meanSent":25.674285714285713,"speedup":2.799448417933741,"L":1347.0,"percentile":80,"cutoff":0.7146,"heavyPractice":115,"misses":[{"day":[1,304],"loadMw":1299.9,"heavy":false,"branches":["L57"],"scores":[0.5178]},{"day":[1,398],"loadMw":1336.2,"heavy":false,"branches":["L57"],"scores":[0.556]}]},{"no":13,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":32.034285714285716,"speedup":2.289832184564025,"L":1274.1,"percentile":70,"cutoff":0.802,"heavyPractice":173,"misses":[]},{"no":14,"missDays":1,"missedCases":1,"recall":0.9995340167753961,"meanSent":29.13142857142857,"speedup":2.4973309053301653,"L":1276.9,"percentile":70,"cutoff":0.8185,"heavyPractice":173,"misses":[{"day":[1,52],"loadMw":1224.7,"heavy":false,"branches":["L48"],"scores":[0.812]}]},{"no":15,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":32.177142857142854,"speedup":2.2805072223588683,"L":1272.7,"percentile":70,"cutoff":0.8017,"heavyPractice":173,"misses":[]},{"no":16,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":33.48,"speedup":2.198842881471551,"L":1268.9,"percentile":70,"cutoff":0.7853,"heavyPractice":173,"misses":[]},{"no":17,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":30.417142857142856,"speedup":2.400966493814133,"L":1276.4,"percentile":70,"cutoff":0.7765,"heavyPractice":173,"misses":[]},{"no":18,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":39.57142857142857,"speedup":1.8834962931832657,"L":1250.1,"percentile":70,"cutoff":0.7511,"heavyPractice":173,"misses":[]},{"no":19,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":32.81142857142857,"speedup":2.2400053179353114,"L":1272.7,"percentile":70,"cutoff":0.7624,"heavyPractice":173,"misses":[]},{"no":20,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":34.862857142857145,"speedup":2.1183282541469257,"L":1263.0,"percentile":70,"cutoff":0.8161,"heavyPractice":173,"misses":[]},{"no":21,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":30.21142857142857,"speedup":2.4158819407670276,"L":1276.4,"percentile":70,"cutoff":0.7999,"heavyPractice":173,"misses":[]},{"no":22,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":30.354285714285716,"speedup":2.4055044145642044,"L":1276.2,"percentile":70,"cutoff":0.802,"heavyPractice":173,"misses":[]},{"no":23,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":36.41142857142857,"speedup":2.034888109531397,"L":1261.3,"percentile":70,"cutoff":0.7708,"heavyPractice":173,"misses":[]},{"no":24,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":34.26857142857143,"speedup":2.152195531772196,"L":1267.7,"percentile":70,"cutoff":0.7644,"heavyPractice":173,"misses":[]},{"no":25,"missDays":2,"missedCases":2,"recall":0.9990829894543787,"meanSent":27.17142857142857,"speedup":2.6600873019670948,"L":1343.5,"percentile":80,"cutoff":0.6987,"heavyPractice":115,"misses":[{"day":[1,304],"loadMw":1299.9,"heavy":false,"branches":["L57"],"scores":[0.5178]},{"day":[1,398],"loadMw":1336.2,"heavy":false,"branches":["L57"],"scores":[0.556]}]},{"no":26,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":29.422857142857143,"speedup":2.474816461236101,"L":1276.6,"percentile":70,"cutoff":0.8168,"heavyPractice":173,"misses":[]},{"no":27,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":33.84,"speedup":2.177298959045355,"L":1268.9,"percentile":70,"cutoff":0.7754,"heavyPractice":173,"misses":[]},{"no":28,"missDays":1,"missedCases":1,"recall":0.9995412844036697,"meanSent":31.485714285714284,"speedup":2.3263600063846104,"L":1274.8,"percentile":70,"cutoff":0.8099,"heavyPractice":173,"misses":[{"day":[1,52],"loadMw":1224.7,"heavy":false,"branches":["L48"],"scores":[0.8091]}]},{"no":29,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":32.76,"speedup":2.2432355848463783,"L":1271.6,"percentile":70,"cutoff":0.794,"heavyPractice":173,"misses":[]},{"no":30,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":31.074285714285715,"speedup":2.3545299253963243,"L":1275.9,"percentile":70,"cutoff":0.7779,"heavyPractice":173,"misses":[]},{"no":31,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":30.451428571428572,"speedup":2.398498473327023,"L":1276.4,"percentile":70,"cutoff":0.7717,"heavyPractice":173,"misses":[]},{"no":32,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":34.645714285714284,"speedup":2.1305785441220926,"L":1264.3,"percentile":70,"cutoff":0.7948,"heavyPractice":173,"misses":[]},{"no":33,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":31.937142857142856,"speedup":2.2962168396194302,"L":1274.1,"percentile":70,"cutoff":0.7975,"heavyPractice":173,"misses":[]},{"no":34,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":32.68,"speedup":2.2482790043135177,"L":1271.9,"percentile":70,"cutoff":0.7794,"heavyPractice":173,"misses":[]},{"no":35,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":31.914285714285715,"speedup":2.2977242891067013,"L":1274.1,"percentile":70,"cutoff":0.7863,"heavyPractice":173,"misses":[]},{"no":36,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":34.05714285714286,"speedup":2.164507130002638,"L":1267.7,"percentile":70,"cutoff":0.7656,"heavyPractice":173,"misses":[]},{"no":37,"missDays":1,"missedCases":1,"recall":0.9995700773860705,"meanSent":36.354285714285716,"speedup":2.037850107354585,"L":1261.2,"percentile":70,"cutoff":0.7969,"heavyPractice":173,"misses":[{"day":[1,52],"loadMw":1224.7,"heavy":false,"branches":["L48"],"scores":[0.7932]}]},{"no":38,"missDays":1,"missedCases":1,"recall":0.9995610184372257,"meanSent":32.371428571428574,"speedup":2.2679464849644333,"L":1334.4,"percentile":80,"cutoff":0.6036,"heavyPractice":115,"misses":[{"day":[1,304],"loadMw":1299.9,"heavy":false,"branches":["L57"],"scores":[0.5178]}]},{"no":39,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":34.285714285714285,"speedup":2.151203429541698,"L":1267.1,"percentile":70,"cutoff":0.7925,"heavyPractice":173,"misses":[]},{"no":40,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":35.142857142857146,"speedup":2.1027382397616576,"L":1263.0,"percentile":70,"cutoff":0.778,"heavyPractice":173,"misses":[]},{"no":41,"missDays":1,"missedCases":1,"recall":0.9995489400090212,"meanSent":34.46857142857143,"speedup":2.1406776396446765,"L":1264.3,"percentile":70,"cutoff":0.8078,"heavyPractice":173,"misses":[{"day":[1,52],"loadMw":1224.7,"heavy":false,"branches":["L48"],"scores":[0.8038]}]},{"no":42,"missDays":1,"missedCases":1,"recall":0.9995719178082192,"meanSent":37.25142857142857,"speedup":1.9923195619675338,"L":1255.0,"percentile":70,"cutoff":0.8076,"heavyPractice":173,"misses":[{"day":[1,52],"loadMw":1224.7,"heavy":false,"branches":["L48"],"scores":[0.7932]}]},{"no":43,"missDays":1,"missedCases":1,"recall":0.9995473064735174,"meanSent":32.26857142857143,"speedup":2.2745790008283366,"L":1272.7,"percentile":70,"cutoff":0.8067,"heavyPractice":173,"misses":[{"day":[1,52],"loadMw":1224.7,"heavy":false,"branches":["L48"],"scores":[0.8044]}]},{"no":44,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":34.12571428571429,"speedup":2.160498774287232,"L":1267.7,"percentile":70,"cutoff":0.7913,"heavyPractice":173,"misses":[]},{"no":45,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":33.18857142857143,"speedup":2.2165979876153905,"L":1270.4,"percentile":70,"cutoff":0.802,"heavyPractice":173,"misses":[]},{"no":46,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":32.70857142857143,"speedup":2.246475181818877,"L":1271.9,"percentile":70,"cutoff":0.8043,"heavyPractice":173,"misses":[]},{"no":47,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":28.982857142857142,"speedup":2.508967245150606,"L":1277.3,"percentile":70,"cutoff":0.7957,"heavyPractice":173,"misses":[]},{"no":48,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":34.72571428571428,"speedup":2.1260488301009235,"L":1264.3,"percentile":70,"cutoff":0.7802,"heavyPractice":173,"misses":[]},{"no":49,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":29.62857142857143,"speedup":2.4591667818379412,"L":1276.6,"percentile":70,"cutoff":0.8053,"heavyPractice":173,"misses":[]},{"no":50,"missDays":0,"missedCases":0,"recall":1.0,"meanSent":30.742857142857144,"speedup":2.3777233832455855,"L":1275.9,"percentile":70,"cutoff":0.801,"heavyPractice":173,"misses":[]}],"distinctMissDays":4,"policies":[{"key":"P1","label":"P1: one cutoff for every day","zeroMiss":38,"missDays":13,"worstRecall":0.9986244841815681,"meanSent":43.93142857142857,"speedup":1.708},{"key":"P2","label":"P2: heavy days send all 80, normal days use a cutoff","zeroMiss":39,"missDays":14,"worstRecall":0.9990829894543787,"meanSent":32.69428571428571,"speedup":2.247},{"key":"P3","label":"P3: a separate cutoff for heavy and for normal days","zeroMiss":31,"missDays":25,"worstRecall":0.9981659789087575,"meanSent":32.26571428571428,"speedup":2.275},{"key":"primary","label":"The selection rule as first registered (picked P3 in 50 of 50)","zeroMiss":31,"missDays":25,"worstRecall":0.9981659789087575,"meanSent":32.26571428571428,"speedup":2.275},{"key":"control_P1_75","label":"Control: P1 fitted on only 75 practice days","zeroMiss":27,"missDays":81,"worstRecall":0.9850611136260752,"meanSent":31.291428571428572,"speedup":2.34}],"days":[{"label":"A typical normal day","kind":"normal","examNo":null,"source":0,"indexInSource":146,"loadMw":946.9,"L":1274.2,"heavy":false,"cutoff":0.7841,"nSent":12,"nPinned":2,"nDangerous":9,"missed":[],"rows":[{"name":"L40","score":null,"pinned":true,"dangerous":true,"sent":true},{"name":"L42","score":null,"pinned":true,"dangerous":true,"sent":true},{"name":"L37","score":3.2491,"pinned":false,"dangerous":true,"sent":true},{"name":"L41","score":3.0399,"pinned":false,"dangerous":true,"sent":true},{"name":"L44","score":2.9032,"pinned":false,"dangerous":true,"sent":true},{"name":"T06","score":2.6463,"pinned":false,"dangerous":true,"sent":true},{"name":"T05","score":2.002,"pinned":false,"dangerous":true,"sent":true},{"name":"L43","score":1.8875,"pinned":false,"dangerous":true,"sent":true},{"name":"T15","score":1.5701,"pinned":false,"dangerous":true,"sent":true},{"name":"L36","score":1.1789,"pinned":false,"dangerous":false,"sent":true},{"name":"L38","score":1.1111,"pinned":false,"dangerous":false,"sent":true},{"name":"L08","score":0.8476,"pinned":false,"dangerous":false,"sent":true},{"name":"L35","score":0.5675,"pinned":false,"dangerous":false,"sent":false},{"name":"L15","score":0.551,"pinned":false,"dangerous":false,"sent":false},{"name":"L51","score":0.5477,"pinned":false,"dangerous":false,"sent":false},{"name":"L17","score":0.5229,"pinned":false,"dangerous":false,"sent":false},{"name":"L20","score":0.4978,"pinned":false,"dangerous":false,"sent":false},{"name":"L01","score":0.4884,"pinned":false,"dangerous":false,"sent":false},{"name":"L02","score":0.4596,"pinned":false,"dangerous":false,"sent":false},{"name":"L25","score":0.4405,"pinned":false,"dangerous":false,"sent":false},{"name":"L52","score":0.4287,"pinned":false,"dangerous":false,"sent":false},{"name":"L07","score":0.4078,"pinned":false,"dangerous":false,"sent":false},{"name":"L18","score":0.4048,"pinned":false,"dangerous":false,"sent":false},{"name":"L26","score":0.402,"pinned":false,"dangerous":false,"sent":false},{"name":"L03","score":0.4004,"pinned":false,"dangerous":false,"sent":false},{"name":"T08","score":0.4004,"pinned":false,"dangerous":false,"sent":false},{"name":"L14","score":0.3982,"pinned":false,"dangerous":false,"sent":false},{"name":"L09","score":0.3949,"pinned":false,"dangerous":false,"sent":false},{"name":"L11","score":0.3941,"pinned":false,"dangerous":false,"sent":false},{"name":"L60","score":0.3933,"pinned":false,"dangerous":false,"sent":false},{"name":"T09","score":0.3914,"pinned":false,"dangerous":false,"sent":false},{"name":"L13","score":0.3901,"pinned":false,"dangerous":false,"sent":false},{"name":"L50","score":0.3899,"pinned":false,"dangerous":false,"sent":false},{"name":"L22","score":0.3892,"pinned":false,"dangerous":false,"sent":false},{"name":"L04","score":0.3884,"pinned":false,"dangerous":false,"sent":false},{"name":"T02","score":0.388,"pinned":false,"dangerous":false,"sent":false},{"name":"T01","score":0.3876,"pinned":false,"dangerous":false,"sent":false},{"name":"T07","score":0.3875,"pinned":false,"dangerous":false,"sent":false},{"name":"L53","score":0.3873,"pinned":false,"dangerous":false,"sent":false},{"name":"L47","score":0.3872,"pinned":false,"dangerous":false,"sent":false},{"name":"L65","score":0.3872,"pinned":false,"dangerous":false,"sent":false},{"name":"L27","score":0.3869,"pinned":false,"dangerous":false,"sent":false},{"name":"L28","score":0.3869,"pinned":false,"dangerous":false,"sent":false},{"name":"L29","score":0.3869,"pinned":false,"dangerous":false,"sent":false},{"name":"L30","score":0.3869,"pinned":false,"dangerous":false,"sent":false},{"name":"L45","score":0.3869,"pinned":false,"dangerous":false,"sent":false},{"name":"L49","score":0.3869,"pinned":false,"dangerous":false,"sent":false},{"name":"L54","score":0.3869,"pinned":false,"dangerous":false,"sent":false},{"name":"L58","score":0.3869,"pinned":false,"dangerous":false,"sent":false},{"name":"L61","score":0.3869,"pinned":false,"dangerous":false,"sent":false},{"name":"L64","score":0.3869,"pinned":false,"dangerous":false,"sent":false},{"name":"L19","score":0.3868,"pinned":false,"dangerous":false,"sent":false},{"name":"L31","score":0.3868,"pinned":false,"dangerous":false,"sent":false},{"name":"L32","score":0.3868,"pinned":false,"dangerous":false,"sent":false},{"name":"L33","score":0.3868,"pinned":false,"dangerous":false,"sent":false},{"name":"L34","score":0.3868,"pinned":false,"dangerous":false,"sent":false},{"name":"L39","score":0.3868,"pinned":false,"dangerous":false,"sent":false},{"name":"L46","score":0.3868,"pinned":false,"dangerous":false,"sent":false},{"name":"L48","score":0.3868,"pinned":false,"dangerous":false,"sent":false},{"name":"L55","score":0.3868,"pinned":false,"dangerous":false,"sent":false},{"name":"L56","score":0.3868,"pinned":false,"dangerous":false,"sent":false},{"name":"L57","score":0.3868,"pinned":false,"dangerous":false,"sent":false},{"name":"L62","score":0.3868,"pinned":false,"dangerous":false,"sent":false},{"name":"L63","score":0.3868,"pinned":false,"dangerous":false,"sent":false},{"name":"T03","score":0.3868,"pinned":false,"dangerous":false,"sent":false},{"name":"T04","score":0.3868,"pinned":false,"dangerous":false,"sent":false},{"name":"T13","score":0.3868,"pinned":false,"dangerous":false,"sent":false},{"name":"T14","score":0.3868,"pinned":false,"dangerous":false,"sent":false},{"name":"L59","score":0.3866,"pinned":false,"dangerous":false,"sent":false},{"name":"T12","score":0.3865,"pinned":false,"dangerous":false,"sent":false},{"name":"L06","score":0.3862,"pinned":false,"dangerous":false,"sent":false},{"name":"L05","score":0.3854,"pinned":false,"dangerous":false,"sent":false},{"name":"L23","score":0.3853,"pinned":false,"dangerous":false,"sent":false},{"name":"T11","score":0.3852,"pinned":false,"dangerous":false,"sent":false},{"name":"L10","score":0.3848,"pinned":false,"dangerous":false,"sent":false},{"name":"L21","score":0.3845,"pinned":false,"dangerous":false,"sent":false},{"name":"T10","score":0.3838,"pinned":false,"dangerous":false,"sent":false},{"name":"L12","score":0.38,"pinned":false,"dangerous":false,"sent":false},{"name":"L16","score":0.3763,"pinned":false,"dangerous":false,"sent":false},{"name":"L24","score":0.372,"pinned":false,"dangerous":false,"sent":false}],"modelChecked":true},{"label":"The busiest normal day","kind":"normal","examNo":null,"source":0,"indexInSource":112,"loadMw":1255.6,"L":1274.2,"heavy":false,"cutoff":0.7841,"nSent":19,"nPinned":3,"nDangerous":16,"missed":[],"rows":[{"name":"L37","score":null,"pinned":true,"dangerous":true,"sent":true},{"name":"L40","score":null,"pinned":true,"dangerous":true,"sent":true},{"name":"L42","score":null,"pinned":true,"dangerous":true,"sent":true},{"name":"L41","score":5.1316,"pinned":false,"dangerous":true,"sent":true},{"name":"L44","score":4.6522,"pinned":false,"dangerous":true,"sent":true},{"name":"T05","score":4.5607,"pinned":false,"dangerous":true,"sent":true},{"name":"T06","score":4.4862,"pinned":false,"dangerous":true,"sent":true},{"name":"L43","score":3.8329,"pinned":false,"dangerous":true,"sent":true},{"name":"T15","score":3.2928,"pinned":false,"dangerous":true,"sent":true},{"name":"L36","score":2.3765,"pinned":false,"dangerous":true,"sent":true},{"name":"L38","score":2.1271,"pinned":false,"dangerous":true,"sent":true},{"name":"L56","score":1.4064,"pinned":false,"dangerous":true,"sent":true},{"name":"L35","score":1.3335,"pinned":false,"dangerous":true,"sent":true},{"name":"L59","score":1.217,"pinned":false,"dangerous":true,"sent":true},{"name":"L08","score":1.136,"pinned":false,"dangerous":true,"sent":true},{"name":"L48","score":0.9623,"pinned":false,"dangerous":true,"sent":true},{"name":"L46","score":0.936,"pinned":false,"dangerous":false,"sent":true},{"name":"T10","score":0.8515,"pinned":false,"dangerous":false,"sent":true},{"name":"L45","score":0.8424,"pinned":false,"dangerous":false,"sent":true},{"name":"L30","score":0.717,"pinned":false,"dangerous":false,"sent":false},{"name":"L20","score":0.6719,"pinned":false,"dangerous":false,"sent":false},{"name":"L51","score":0.6628,"pinned":false,"dangerous":false,"sent":false},{"name":"T09","score":0.6565,"pinned":false,"dangerous":false,"sent":false},{"name":"L15","score":0.6502,"pinned":false,"dangerous":false,"sent":false},{"name":"L32","score":0.6482,"pinned":false,"dangerous":false,"sent":false},{"name":"L17","score":0.644,"pinned":false,"dangerous":false,"sent":false},{"name":"L33","score":0.6128,"pinned":false,"dangerous":false,"sent":false},{"name":"T04","score":0.5947,"pinned":false,"dangerous":false,"sent":false},{"name":"L01","score":0.5938,"pinned":false,"dangerous":false,"sent":false},{"name":"L02","score":0.5682,"pinned":false,"dangerous":false,"sent":false},{"name":"L07","score":0.5653,"pinned":false,"dangerous":false,"sent":false},{"name":"L34","score":0.5644,"pinned":false,"dangerous":false,"sent":false},{"name":"L25","score":0.5436,"pinned":false,"dangerous":false,"sent":false},{"name":"L05","score":0.5213,"pinned":false,"dangerous":false,"sent":false},{"name":"L19","score":0.5206,"pinned":false,"dangerous":false,"sent":false},{"name":"L47","score":0.5139,"pinned":false,"dangerous":false,"sent":false},{"name":"L16","score":0.51,"pinned":false,"dangerous":false,"sent":false},{"name":"L14","score":0.5085,"pinned":false,"dangerous":false,"sent":false},{"name":"T07","score":0.5077,"pinned":false,"dangerous":false,"sent":false},{"name":"L18","score":0.5041,"pinned":false,"dangerous":false,"sent":false},{"name":"L24","score":0.504,"pinned":false,"dangerous":false,"sent":false},{"name":"T11","score":0.5039,"pinned":false,"dangerous":false,"sent":false},{"name":"L54","score":0.5033,"pinned":false,"dangerous":false,"sent":false},{"name":"T13","score":0.5032,"pinned":false,"dangerous":false,"sent":false},{"name":"L49","score":0.5031,"pinned":false,"dangerous":false,"sent":false},{"name":"L62","score":0.5031,"pinned":false,"dangerous":false,"sent":false},{"name":"L26","score":0.503,"pinned":false,"dangerous":false,"sent":false},{"name":"T14","score":0.503,"pinned":false,"dangerous":false,"sent":false},{"name":"L11","score":0.5029,"pinned":false,"dangerous":false,"sent":false},{"name":"L63","score":0.5029,"pinned":false,"dangerous":false,"sent":false},{"name":"L27","score":0.5028,"pinned":false,"dangerous":false,"sent":false},{"name":"L28","score":0.5028,"pinned":false,"dangerous":false,"sent":false},{"name":"L29","score":0.5028,"pinned":false,"dangerous":false,"sent":false},{"name":"L31","score":0.5028,"pinned":false,"dangerous":false,"sent":false},{"name":"L39","score":0.5028,"pinned":false,"dangerous":false,"sent":false},{"name":"T03","score":0.5028,"pinned":false,"dangerous":false,"sent":false},{"name":"L52","score":0.5025,"pinned":false,"dangerous":false,"sent":false},{"name":"T02","score":0.5025,"pinned":false,"dangerous":false,"sent":false},{"name":"L04","score":0.5024,"pinned":false,"dangerous":false,"sent":false},{"name":"L50","score":0.5024,"pinned":false,"dangerous":false,"sent":false},{"name":"L53","score":0.5024,"pinned":false,"dangerous":false,"sent":false},{"name":"L60","score":0.5024,"pinned":false,"dangerous":false,"sent":false},{"name":"T01","score":0.5024,"pinned":false,"dangerous":false,"sent":false},{"name":"L57","score":0.5023,"pinned":false,"dangerous":false,"sent":false},{"name":"L65","score":0.5023,"pinned":false,"dangerous":false,"sent":false},{"name":"T12","score":0.5023,"pinned":false,"dangerous":false,"sent":false},{"name":"L61","score":0.502,"pinned":false,"dangerous":false,"sent":false},{"name":"L23","score":0.5019,"pinned":false,"dangerous":false,"sent":false},{"name":"L64","score":0.5019,"pinned":false,"dangerous":false,"sent":false},{"name":"L55","score":0.5016,"pinned":false,"dangerous":false,"sent":false},{"name":"L58","score":0.5016,"pinned":false,"dangerous":false,"sent":false},{"name":"T08","score":0.5012,"pinned":false,"dangerous":false,"sent":false},{"name":"L03","score":0.5011,"pinned":false,"dangerous":false,"sent":false},{"name":"L13","score":0.501,"pinned":false,"dangerous":false,"sent":false},{"name":"L06","score":0.4998,"pinned":false,"dangerous":false,"sent":false},{"name":"L21","score":0.4988,"pinned":false,"dangerous":false,"sent":false},{"name":"L22","score":0.4922,"pinned":false,"dangerous":false,"sent":false},{"name":"L09","score":0.4881,"pinned":false,"dangerous":false,"sent":false},{"name":"L12","score":0.4872,"pinned":false,"dangerous":false,"sent":false},{"name":"L10","score":0.4852,"pinned":false,"dangerous":false,"sent":false}],"modelChecked":true},{"label":"The closest call","kind":"close","examNo":null,"source":0,"indexInSource":184,"loadMw":1240.9,"L":1274.2,"heavy":false,"cutoff":0.7841,"nSent":16,"nPinned":2,"nDangerous":14,"missed":[],"rows":[{"name":"L40","score":null,"pinned":true,"dangerous":true,"sent":true},{"name":"L42","score":null,"pinned":true,"dangerous":true,"sent":true},{"name":"L37","score":4.7324,"pinned":false,"dangerous":true,"sent":true},{"name":"L41","score":4.6636,"pinned":false,"dangerous":true,"sent":true},{"name":"T06","score":4.4083,"pinned":false,"dangerous":true,"sent":true},{"name":"L44","score":3.9663,"pinned":false,"dangerous":true,"sent":true},{"name":"T05","score":3.7212,"pinned":false,"dangerous":true,"sent":true},{"name":"L43","score":3.0505,"pinned":false,"dangerous":true,"sent":true},{"name":"T15","score":2.5316,"pinned":false,"dangerous":true,"sent":true},{"name":"L36","score":2.1377,"pinned":false,"dangerous":true,"sent":true},{"name":"L38","score":2.0813,"pinned":false,"dangerous":true,"sent":true},{"name":"L35","score":1.0922,"pinned":false,"dangerous":true,"sent":true},{"name":"L08","score":1.0862,"pinned":false,"dangerous":true,"sent":true},{"name":"L48","score":0.8297,"pinned":false,"dangerous":true,"sent":true},{"name":"L56","score":0.8134,"pinned":false,"dangerous":false,"sent":true},{"name":"L46","score":0.7843,"pinned":false,"dangerous":false,"sent":true},{"name":"L59","score":0.7344,"pinned":false,"dangerous":false,"sent":false},{"name":"L15","score":0.7152,"pinned":false,"dangerous":false,"sent":false},{"name":"T10","score":0.7086,"pinned":false,"dangerous":false,"sent":false},{"name":"L17","score":0.7025,"pinned":false,"dangerous":false,"sent":false},{"name":"L45","score":0.6521,"pinned":false,"dangerous":false,"sent":false},{"name":"L20","score":0.6471,"pinned":false,"dangerous":false,"sent":false},{"name":"L01","score":0.6453,"pinned":false,"dangerous":false,"sent":false},{"name":"L51","score":0.6339,"pinned":false,"dangerous":false,"sent":false},{"name":"T09","score":0.6278,"pinned":false,"dangerous":false,"sent":false},{"name":"L02","score":0.6207,"pinned":false,"dangerous":false,"sent":false},{"name":"L25","score":0.5885,"pinned":false,"dangerous":false,"sent":false},{"name":"L11","score":0.5522,"pinned":false,"dangerous":false,"sent":false},{"name":"L18","score":0.5396,"pinned":false,"dangerous":false,"sent":false},{"name":"T08","score":0.5361,"pinned":false,"dangerous":false,"sent":false},{"name":"L07","score":0.536,"pinned":false,"dangerous":false,"sent":false},{"name":"L26","score":0.5356,"pinned":false,"dangerous":false,"sent":false},{"name":"L03","score":0.5343,"pinned":false,"dangerous":false,"sent":false},{"name":"L09","score":0.5335,"pinned":false,"dangerous":false,"sent":false},{"name":"L14","score":0.527,"pinned":false,"dangerous":false,"sent":false},{"name":"L60","score":0.5253,"pinned":false,"dangerous":false,"sent":false},{"name":"L30","score":0.5215,"pinned":false,"dangerous":false,"sent":false},{"name":"L50","score":0.5215,"pinned":false,"dangerous":false,"sent":false},{"name":"L22","score":0.52,"pinned":false,"dangerous":false,"sent":false},{"name":"L13","score":0.5197,"pinned":false,"dangerous":false,"sent":false},{"name":"L21","score":0.5185,"pinned":false,"dangerous":false,"sent":false},{"name":"L04","score":0.5182,"pinned":false,"dangerous":false,"sent":false},{"name":"T02","score":0.5178,"pinned":false,"dangerous":false,"sent":false},{"name":"L47","score":0.5176,"pinned":false,"dangerous":false,"sent":false},{"name":"L53","score":0.5176,"pinned":false,"dangerous":false,"sent":false},{"name":"L65","score":0.5176,"pinned":false,"dangerous":false,"sent":false},{"name":"T07","score":0.5174,"pinned":false,"dangerous":false,"sent":false},{"name":"L52","score":0.5173,"pinned":false,"dangerous":false,"sent":false},{"name":"T01","score":0.5173,"pinned":false,"dangerous":false,"sent":false},{"name":"L55","score":0.5172,"pinned":false,"dangerous":false,"sent":false},{"name":"L49","score":0.5171,"pinned":false,"dangerous":false,"sent":false},{"name":"L28","score":0.517,"pinned":false,"dangerous":false,"sent":false},{"name":"L29","score":0.517,"pinned":false,"dangerous":false,"sent":false},{"name":"L54","score":0.517,"pinned":false,"dangerous":false,"sent":false},{"name":"L58","score":0.517,"pinned":false,"dangerous":false,"sent":false},{"name":"L27","score":0.5169,"pinned":false,"dangerous":false,"sent":false},{"name":"L31","score":0.5169,"pinned":false,"dangerous":false,"sent":false},{"name":"L32","score":0.5169,"pinned":false,"dangerous":false,"sent":false},{"name":"L33","score":0.5169,"pinned":false,"dangerous":false,"sent":false},{"name":"L34","score":0.5169,"pinned":false,"dangerous":false,"sent":false},{"name":"L39","score":0.5169,"pinned":false,"dangerous":false,"sent":false},{"name":"L57","score":0.5169,"pinned":false,"dangerous":false,"sent":false},{"name":"L61","score":0.5169,"pinned":false,"dangerous":false,"sent":false},{"name":"L62","score":0.5169,"pinned":false,"dangerous":false,"sent":false},{"name":"L63","score":0.5169,"pinned":false,"dangerous":false,"sent":false},{"name":"L64","score":0.5169,"pinned":false,"dangerous":false,"sent":false},{"name":"T03","score":0.5169,"pinned":false,"dangerous":false,"sent":false},{"name":"T04","score":0.5169,"pinned":false,"dangerous":false,"sent":false},{"name":"T13","score":0.5169,"pinned":false,"dangerous":false,"sent":false},{"name":"T14","score":0.5169,"pinned":false,"dangerous":false,"sent":false},{"name":"L19","score":0.5168,"pinned":false,"dangerous":false,"sent":false},{"name":"T12","score":0.5163,"pinned":false,"dangerous":false,"sent":false},{"name":"L06","score":0.5151,"pinned":false,"dangerous":false,"sent":false},{"name":"T11","score":0.5151,"pinned":false,"dangerous":false,"sent":false},{"name":"L23","score":0.5146,"pinned":false,"dangerous":false,"sent":false},{"name":"L05","score":0.5143,"pinned":false,"dangerous":false,"sent":false},{"name":"L10","score":0.5112,"pinned":false,"dangerous":false,"sent":false},{"name":"L12","score":0.5099,"pinned":false,"dangerous":false,"sent":false},{"name":"L16","score":0.4894,"pinned":false,"dangerous":false,"sent":false},{"name":"L24","score":0.4825,"pinned":false,"dangerous":false,"sent":false}],"modelChecked":true},{"label":"A heavy day","kind":"heavy","examNo":null,"source":0,"indexInSource":194,"loadMw":1384.7,"L":1274.2,"heavy":true,"cutoff":0.7841,"nSent":80,"nPinned":5,"nDangerous":19,"missed":[],"rows":[{"name":"L37","score":null,"pinned":true,"dangerous":true,"sent":true},{"name":"L40","score":null,"pinned":true,"dangerous":true,"sent":true},{"name":"L41","score":null,"pinned":true,"dangerous":true,"sent":true},{"name":"L42","score":null,"pinned":true,"dangerous":true,"sent":true},{"name":"T06","score":null,"pinned":true,"dangerous":true,"sent":true},{"name":"T05","score":5.8762,"pinned":false,"dangerous":true,"sent":true},{"name":"L44","score":4.8065,"pinned":false,"dangerous":true,"sent":true},{"name":"L43","score":4.0119,"pinned":false,"dangerous":true,"sent":true},{"name":"T15","score":3.8662,"pinned":false,"dangerous":true,"sent":true},{"name":"L36","score":3.1267,"pinned":false,"dangerous":true,"sent":true},{"name":"L38","score":2.0907,"pinned":false,"dangerous":true,"sent":true},{"name":"L56","score":1.7401,"pinned":false,"dangerous":true,"sent":true},{"name":"L35","score":1.634,"pinned":false,"dangerous":true,"sent":true},{"name":"T10","score":1.5776,"pinned":false,"dangerous":true,"sent":true},{"name":"L59","score":1.4175,"pinned":false,"dangerous":true,"sent":true},{"name":"L08","score":1.1699,"pinned":false,"dangerous":true,"sent":true},{"name":"L48","score":1.0629,"pinned":false,"dangerous":true,"sent":true},{"name":"L46","score":0.9993,"pinned":false,"dangerous":true,"sent":true},{"name":"L45","score":0.9005,"pinned":false,"dangerous":false,"sent":true},{"name":"L15","score":0.7823,"pinned":false,"dangerous":false,"sent":true},{"name":"L17","score":0.7796,"pinned":false,"dangerous":false,"sent":true},{"name":"L32","score":0.7745,"pinned":false,"dangerous":false,"sent":true},{"name":"L30","score":0.7444,"pinned":false,"dangerous":true,"sent":true},{"name":"L33","score":0.7409,"pinned":false,"dangerous":false,"sent":true},{"name":"L01","score":0.702,"pinned":false,"dangerous":false,"sent":true},{"name":"L20","score":0.6909,"pinned":false,"dangerous":false,"sent":true},{"name":"L02","score":0.684,"pinned":false,"dangerous":false,"sent":true},{"name":"L51","score":0.6628,"pinned":false,"dangerous":false,"sent":true},{"name":"T09","score":0.6565,"pinned":false,"dangerous":false,"sent":true},{"name":"L25","score":0.6497,"pinned":false,"dangerous":false,"sent":true},{"name":"L11","score":0.619,"pinned":false,"dangerous":false,"sent":true},{"name":"L18","score":0.5965,"pinned":false,"dangerous":false,"sent":true},{"name":"T08","score":0.5965,"pinned":false,"dangerous":false,"sent":true},{"name":"L26","score":0.5956,"pinned":false,"dangerous":false,"sent":true},{"name":"L03","score":0.5936,"pinned":false,"dangerous":false,"sent":true},{"name":"L09","score":0.5932,"pinned":false,"dangerous":false,"sent":true},{"name":"L14","score":0.584,"pinned":false,"dangerous":false,"sent":true},{"name":"L60","score":0.5827,"pinned":false,"dangerous":false,"sent":true},{"name":"L07","score":0.5821,"pinned":false,"dangerous":false,"sent":true},{"name":"L21","score":0.5804,"pinned":false,"dangerous":false,"sent":true},{"name":"L50","score":0.579,"pinned":false,"dangerous":false,"sent":true},{"name":"L22","score":0.5788,"pinned":false,"dangerous":false,"sent":true},{"name":"L13","score":0.5773,"pinned":false,"dangerous":false,"sent":true},{"name":"L04","score":0.5758,"pinned":false,"dangerous":false,"sent":true},{"name":"L47","score":0.5754,"pinned":false,"dangerous":false,"sent":true},{"name":"L53","score":0.5754,"pinned":false,"dangerous":false,"sent":true},{"name":"L55","score":0.5754,"pinned":false,"dangerous":false,"sent":true},{"name":"L65","score":0.5753,"pinned":false,"dangerous":false,"sent":true},{"name":"T02","score":0.5752,"pinned":false,"dangerous":false,"sent":true},{"name":"T07","score":0.5752,"pinned":false,"dangerous":false,"sent":true},{"name":"L52","score":0.5751,"pinned":false,"dangerous":false,"sent":true},{"name":"L23","score":0.575,"pinned":false,"dangerous":false,"sent":true},{"name":"L49","score":0.5749,"pinned":false,"dangerous":false,"sent":true},{"name":"L29","score":0.5748,"pinned":false,"dangerous":false,"sent":true},{"name":"L54","score":0.5748,"pinned":false,"dangerous":false,"sent":true},{"name":"L28","score":0.5747,"pinned":false,"dangerous":false,"sent":true},{"name":"L31","score":0.5747,"pinned":false,"dangerous":false,"sent":true},{"name":"L34","score":0.5747,"pinned":false,"dangerous":false,"sent":true},{"name":"L39","score":0.5747,"pinned":false,"dangerous":false,"sent":true},{"name":"L57","score":0.5747,"pinned":false,"dangerous":false,"sent":true},{"name":"L58","score":0.5747,"pinned":false,"dangerous":false,"sent":true},{"name":"L61","score":0.5747,"pinned":false,"dangerous":false,"sent":true},{"name":"L62","score":0.5747,"pinned":false,"dangerous":false,"sent":true},{"name":"L63","score":0.5747,"pinned":false,"dangerous":false,"sent":true},{"name":"L64","score":0.5747,"pinned":false,"dangerous":false,"sent":true},{"name":"T01","score":0.5747,"pinned":false,"dangerous":false,"sent":true},{"name":"T03","score":0.5747,"pinned":false,"dangerous":false,"sent":true},{"name":"T04","score":0.5747,"pinned":false,"dangerous":false,"sent":true},{"name":"T13","score":0.5747,"pinned":false,"dangerous":false,"sent":true},{"name":"T14","score":0.5747,"pinned":false,"dangerous":false,"sent":true},{"name":"L27","score":0.5746,"pinned":false,"dangerous":false,"sent":true},{"name":"L19","score":0.5744,"pinned":false,"dangerous":false,"sent":true},{"name":"T12","score":0.574,"pinned":false,"dangerous":false,"sent":true},{"name":"L06","score":0.5727,"pinned":false,"dangerous":false,"sent":true},{"name":"T11","score":0.5727,"pinned":false,"dangerous":false,"sent":true},{"name":"L05","score":0.5724,"pinned":false,"dangerous":false,"sent":true},{"name":"L10","score":0.5675,"pinned":false,"dangerous":false,"sent":true},{"name":"L12","score":0.5662,"pinned":false,"dangerous":false,"sent":true},{"name":"L16","score":0.541,"pinned":false,"dangerous":false,"sent":true},{"name":"L24","score":0.5281,"pinned":false,"dangerous":false,"sent":true}],"modelChecked":true},{"label":"A day it missed (exam 2 of 50)","kind":"miss","examNo":2,"source":1,"indexInSource":52,"loadMw":1224.7,"L":1276.4,"heavy":false,"cutoff":0.8226,"nSent":15,"nPinned":3,"nDangerous":16,"missed":["L48"],"rows":[{"name":"L37","score":null,"pinned":true,"dangerous":true,"sent":true},{"name":"L40","score":null,"pinned":true,"dangerous":true,"sent":true},{"name":"L42","score":null,"pinned":true,"dangerous":true,"sent":true},{"name":"L41","score":4.9162,"pinned":false,"dangerous":true,"sent":true},{"name":"T05","score":4.5286,"pinned":false,"dangerous":true,"sent":true},{"name":"T06","score":4.5122,"pinned":false,"dangerous":true,"sent":true},{"name":"L44","score":4.2413,"pinned":false,"dangerous":true,"sent":true},{"name":"L43","score":3.3811,"pinned":false,"dangerous":true,"sent":true},{"name":"T15","score":3.1628,"pinned":false,"dangerous":true,"sent":true},{"name":"L36","score":2.4401,"pinned":false,"dangerous":true,"sent":true},{"name":"L38","score":2.0142,"pinned":false,"dangerous":true,"sent":true},{"name":"L35","score":1.2745,"pinned":false,"dangerous":true,"sent":true},{"name":"L56","score":1.104,"pinned":false,"dangerous":true,"sent":true},{"name":"L08","score":1.0969,"pinned":false,"dangerous":true,"sent":true},{"name":"L59","score":1.0871,"pinned":false,"dangerous":true,"sent":true},{"name":"L48","score":0.8055,"pinned":false,"dangerous":true,"sent":false},{"name":"L46","score":0.7651,"pinned":false,"dangerous":false,"sent":false},{"name":"L51","score":0.6612,"pinned":false,"dangerous":false,"sent":false},{"name":"L20","score":0.6567,"pinned":false,"dangerous":false,"sent":false},{"name":"T09","score":0.6548,"pinned":false,"dangerous":false,"sent":false},{"name":"L15","score":0.6333,"pinned":false,"dangerous":false,"sent":false},{"name":"L17","score":0.624,"pinned":false,"dangerous":false,"sent":false},{"name":"L30","score":0.6232,"pinned":false,"dangerous":false,"sent":false},{"name":"L45","score":0.6011,"pinned":false,"dangerous":false,"sent":false},{"name":"L01","score":0.5707,"pinned":false,"dangerous":false,"sent":false},{"name":"T10","score":0.5669,"pinned":false,"dangerous":false,"sent":false},{"name":"L02","score":0.548,"pinned":false,"dangerous":false,"sent":false},{"name":"L07","score":0.5435,"pinned":false,"dangerous":false,"sent":false},{"name":"T04","score":0.5355,"pinned":false,"dangerous":false,"sent":false},{"name":"L32","score":0.5252,"pinned":false,"dangerous":false,"sent":false},{"name":"L25","score":0.5243,"pinned":false,"dangerous":false,"sent":false},{"name":"T02","score":0.5153,"pinned":false,"dangerous":false,"sent":false},{"name":"T11","score":0.5026,"pinned":false,"dangerous":false,"sent":false},{"name":"L05","score":0.5007,"pinned":false,"dangerous":false,"sent":false},{"name":"L19","score":0.5002,"pinned":false,"dangerous":false,"sent":false},{"name":"L33","score":0.4896,"pinned":false,"dangerous":false,"sent":false},{"name":"L11","score":0.4894,"pinned":false,"dangerous":false,"sent":false},{"name":"L16","score":0.489,"pinned":false,"dangerous":false,"sent":false},{"name":"L14","score":0.4878,"pinned":false,"dangerous":false,"sent":false},{"name":"T07","score":0.4877,"pinned":false,"dangerous":false,"sent":false},{"name":"L18","score":0.4839,"pinned":false,"dangerous":false,"sent":false},{"name":"L24","score":0.4837,"pinned":false,"dangerous":false,"sent":false},{"name":"L54","score":0.4831,"pinned":false,"dangerous":false,"sent":false},{"name":"L49","score":0.4829,"pinned":false,"dangerous":false,"sent":false},{"name":"T13","score":0.4829,"pinned":false,"dangerous":false,"sent":false},{"name":"L26","score":0.4828,"pinned":false,"dangerous":false,"sent":false},{"name":"L62","score":0.4828,"pinned":false,"dangerous":false,"sent":false},{"name":"T14","score":0.4828,"pinned":false,"dangerous":false,"sent":false},{"name":"L28","score":0.4827,"pinned":false,"dangerous":false,"sent":false},{"name":"L29","score":0.4827,"pinned":false,"dangerous":false,"sent":false},{"name":"L31","score":0.4827,"pinned":false,"dangerous":false,"sent":false},{"name":"L39","score":0.4827,"pinned":false,"dangerous":false,"sent":false},{"name":"L63","score":0.4827,"pinned":false,"dangerous":false,"sent":false},{"name":"T03","score":0.4827,"pinned":false,"dangerous":false,"sent":false},{"name":"L27","score":0.4826,"pinned":false,"dangerous":false,"sent":false},{"name":"L34","score":0.4825,"pinned":false,"dangerous":false,"sent":false},{"name":"L47","score":0.4825,"pinned":false,"dangerous":false,"sent":false},{"name":"L52","score":0.4824,"pinned":false,"dangerous":false,"sent":false},{"name":"L50","score":0.4823,"pinned":false,"dangerous":false,"sent":false},{"name":"L60","score":0.4823,"pinned":false,"dangerous":false,"sent":false},{"name":"L04","score":0.4822,"pinned":false,"dangerous":false,"sent":false},{"name":"L53","score":0.4822,"pinned":false,"dangerous":false,"sent":false},{"name":"L65","score":0.4822,"pinned":false,"dangerous":false,"sent":false},{"name":"T01","score":0.4822,"pinned":false,"dangerous":false,"sent":false},{"name":"L57","score":0.4821,"pinned":false,"dangerous":false,"sent":false},{"name":"L61","score":0.4818,"pinned":false,"dangerous":false,"sent":false},{"name":"L64","score":0.4818,"pinned":false,"dangerous":false,"sent":false},{"name":"L23","score":0.4816,"pinned":false,"dangerous":false,"sent":false},{"name":"L58","score":0.4815,"pinned":false,"dangerous":false,"sent":false},{"name":"L55","score":0.4814,"pinned":false,"dangerous":false,"sent":false},{"name":"T08","score":0.4812,"pinned":false,"dangerous":false,"sent":false},{"name":"L03","score":0.4809,"pinned":false,"dangerous":false,"sent":false},{"name":"L06","score":0.4806,"pinned":false,"dangerous":false,"sent":false},{"name":"L13","score":0.4805,"pinned":false,"dangerous":false,"sent":false},{"name":"L21","score":0.4792,"pinned":false,"dangerous":false,"sent":false},{"name":"T12","score":0.4792,"pinned":false,"dangerous":false,"sent":false},{"name":"L22","score":0.4714,"pinned":false,"dangerous":false,"sent":false},{"name":"L09","score":0.4709,"pinned":false,"dangerous":false,"sent":false},{"name":"L12","score":0.4699,"pinned":false,"dangerous":false,"sent":false},{"name":"L10","score":0.4675,"pinned":false,"dangerous":false,"sent":false}],"modelChecked":true}],"fixedExam":{"practice":575,"exam":175,"missDays":0},"accuracy":{"all_cases":{"mae_vm_pu":0.007599,"mae_va_degrees":0.426581,"mae_flow_percent_of_rating":1.119127,"n_cases":13561},"dangerous_only":{"mae_vm_pu":0.011784,"mae_va_degrees":0.704873,"mae_flow_percent_of_rating":1.864886,"n_cases":1745}},"accuracyDays":175};
+
+const $ = id => document.getElementById(id);
+const fmt = (x, d = 2) => Number(x).toFixed(d);
+const pct = (x, d = 2) => (100 * x).toFixed(d) + '%';
+const N = DATA.n;
+const H = DATA.headline;
+const totalDays = DATA.nExams * DATA.nExamDays;
+const comma = x => x.toLocaleString('en-US');
+
+/* ---- headline --------------------------------------------------------- */
+$('caseName').textContent = 'IEEE 57-bus (' + DATA.case + ')';
+$('hExams').textContent = DATA.nExams;
+$('hPrac').textContent = DATA.nPractice;
+$('hExamDays').textContent = DATA.nExamDays;
+$('hTotalDays').textContent = comma(totalDays);
+$('hSpeed').textContent = fmt(H.speedup) + 'x';
+$('hSent').textContent = fmt(H.meanSent, 1);
+$('hSentOf').textContent = 'of ' + N + ' per day, median exam';
+$('hMiss').textContent = H.missDays + ' of ' + comma(totalDays);
+$('hMissRate').textContent = 'about 1 day in ' + Math.round(totalDays / H.missDays);
+$('hRecall').textContent = pct(H.worstRecall);
+$('hVerdict').innerHTML = '';
+$('hVerdict').append(
+  'The pass mark I set in advance was not reached. I wanted zero misses on at least '
+  + DATA.passNeeded + ' of ' + DATA.nExams + ' exams and got ' + H.zeroMiss
+  + '. With the selection rule exactly as I first registered it the result was worse, '
+  + H.registeredZeroMiss + ' of ' + DATA.nExams
+  + '. So this tool cannot promise that it never misses. What it can state is the measured miss rate above.');
+
+/* ---- the 50 exams ----------------------------------------------------- */
+const maxMiss = Math.max(1, ...DATA.exams.map(e => e.missDays));
+let activeExam = DATA.exams.findIndex(e => e.missDays > 0);
+if (activeExam < 0) activeExam = 0;
+$('axisEnd').textContent = 'exam ' + DATA.nExams;
+$('eRepeat').textContent = 'Every exam is a new random split of the same ' + comma(DATA.poolDays)
+  + ' days, so one hard day can land in several exams. The ' + H.missDays + ' miss days are '
+  + 'only ' + DATA.distinctMissDays + ' different days: a hard day counts once for every exam it is missed in.';
+DATA.exams.forEach((e, i) => {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = e.missDays ? 'miss' : '';
+  b.setAttribute('aria-label', 'Exam ' + e.no + ': ' + e.missDays + ' day(s) with a miss');
+  b.title = 'Exam ' + e.no + ': ' + e.missDays + ' day(s) with a miss';
+  const bar = document.createElement('i');
+  bar.style.height = e.missDays ? (100 * e.missDays / maxMiss) + '%' : '6px';
+  b.appendChild(bar);
+  b.onclick = () => { activeExam = i; drawExam(); };
+  b.onkeydown = ev => {
+    const step = ev.key === 'ArrowRight' ? 1 : ev.key === 'ArrowLeft' ? -1 : 0;
+    if (!step) return;
+    ev.preventDefault();
+    activeExam = (i + step + DATA.exams.length) % DATA.exams.length;
+    drawExam();
+    $('exams').children[activeExam].focus();
+  };
+  $('exams').appendChild(b);
+});
+
+function drawExam() {
+  const e = DATA.exams[activeExam];
+  [...$('exams').children].forEach((c, j) => c.setAttribute('aria-pressed', j === activeExam));
+  $('eNo').textContent = e.no + ' of ' + DATA.nExams;
+  $('eMiss').textContent = e.missDays + ' of ' + DATA.nExamDays;
+  $('eMiss').className = 'n' + (e.missDays ? ' alarm' : '');
+  $('eRecall').textContent = pct(e.recall);
+  $('eSpeed').textContent = fmt(e.speedup) + 'x';
+  const v = $('eVerdict');
+  v.textContent = '';
+  const intro = document.createElement('div');
+  intro.textContent = 'Fitted on practice: heavy-day threshold ' + comma(e.L) + ' MW ('
+    + e.percentile + 'th percentile of practice load), normal-day cutoff '
+    + fmt(e.cutoff, 3) + '. On average ' + fmt(e.meanSent, 1) + ' of ' + N
+    + ' cases sent per day.';
+  v.appendChild(intro);
+  if (!e.missDays) {
+    v.className = 'verdict';
+    const ok = document.createElement('div');
+    ok.style.marginTop = '6px';
+    ok.textContent = 'Every dangerous case on all ' + DATA.nExamDays + ' exam days was sent to the solver.';
+    v.appendChild(ok);
+  } else {
+    v.className = 'verdict bad';
+    const ul = document.createElement('ul');
+    ul.className = 'misses';
+    e.misses.forEach(m => {
+      const li = document.createElement('li');
+      li.textContent = 'A normal day at ' + comma(m.loadMw) + ' MW: missed '
+        + m.branches.map((b, k) => b + ' (model score ' + fmt(m.scores[k], 3) + ')').join(', ')
+        + ', below the cutoff of ' + fmt(e.cutoff, 3) + '.';
+      ul.appendChild(li);
+    });
+    v.appendChild(ul);
+  }
+}
+
+/* ---- one day ---------------------------------------------------------- */
+let activeDay = 0, showAll = false;
+$('fxExam').textContent = DATA.fixedExam.exam;
+$('fxPrac').textContent = DATA.fixedExam.practice;
+DATA.days.forEach((d, i) => {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.setAttribute('role', 'tab');
+  b.textContent = d.label;
+  b.onclick = () => { activeDay = i; showAll = false; drawDay(); };
+  $('tabs').appendChild(b);
+});
+
+function cell(content, cls) {
+  const td = document.createElement('td');
+  if (cls) td.className = cls;
+  if (content instanceof Node) td.appendChild(content); else td.textContent = content;
+  return td;
+}
+function tag(text, cls) {
+  const s = document.createElement('span');
+  s.className = 'tag' + (cls ? ' ' + cls : '');
+  s.textContent = text;
+  return s;
+}
+
+function drawDay() {
+  const d = DATA.days[activeDay];
+  [...$('tabs').children].forEach((c, j) => c.setAttribute('aria-selected', j === activeDay));
+  $('dLoad').textContent = comma(d.loadMw) + ' MW';
+  $('dHeavy').textContent = (d.heavy ? 'heavy: at or above ' : 'normal: below ') + comma(d.L) + ' MW';
+  $('dSent').textContent = d.nSent + ' of ' + N;
+  $('dPinned').textContent = d.nPinned ? d.nPinned + ' of them split the grid or have no solution' : '';
+  $('dDang').textContent = d.nDangerous + ' of ' + N;
+  $('dMissed').textContent = d.missed.length ? d.missed.join(', ') : 'none';
+  $('dMissed').className = 'n' + (d.missed.length ? ' alarm' : '');
+
+  const v = $('dVerdict');
+  if (d.heavy) {
+    v.className = 'verdict';
+    v.textContent = 'Heavy day, so all ' + N + ' cases go to the solver. Nothing can be missed, and nothing is saved.';
+  } else if (d.missed.length) {
+    v.className = 'verdict bad';
+    v.textContent = 'Normal day with cutoff ' + fmt(d.cutoff, 3) + '. The model scored '
+      + d.missed.join(', ') + ' below the cutoff, so it was never sent to the solver, but the solver says it is dangerous. '
+      + 'This is one of the ' + H.missDays + ' miss days.';
+  } else {
+    v.className = 'verdict';
+    v.textContent = 'Normal day: every case scoring ' + fmt(d.cutoff, 3)
+      + ' or more is sent, plus any case that splits the grid or has no solution. All '
+      + d.nDangerous + ' dangerous cases were sent.';
+  }
+
+  const tb = $('dBody'); tb.textContent = '';
+  const lastSent = d.rows.reduce((m, r, i) => r.sent ? i : m, -1);
+  const extra = d.rows.findIndex((r, i) => i > lastSent && r.dangerous);
+  let limit = Math.max(lastSent + 6, extra + 1, 20);
+  if (showAll) limit = d.rows.length;
+  limit = Math.min(limit, d.rows.length);
+  d.rows.slice(0, limit).forEach((r, i) => {
+    const tr = document.createElement('tr');
+    const miss = r.dangerous && !r.sent;
+    tr.className = [miss ? 'missrow' : r.dangerous ? 'dang' : '', r.sent ? '' : 'notsent',
+      !d.heavy && i === lastSent + 1 ? 'line' : ''].join(' ').trim();
+    const name = document.createDocumentFragment();
+    name.append(r.name + ' ');
+    if (r.pinned) name.appendChild(tag('splits grid / no solution', 'pin'));
+    tr.append(
+      cell(i + 1, 'num'),
+      cell(name),
+      cell(r.score === null ? 'n/a' : fmt(r.score, 3), 'num'),
+      cell(r.dangerous ? tag('dangerous') : 'safe'),
+      cell(r.sent ? 'yes' : miss ? 'NO, missed' : 'no'),
+    );
+    tb.appendChild(tr);
+  });
+  $('dMore').textContent = showAll ? 'Show fewer rows' : 'Show all ' + N + ' branches';
+  $('dMore').hidden = !showAll && limit >= d.rows.length;
+}
+$('dMore').onclick = () => { showAll = !showAll; drawDay(); };
+
+/* ---- policy table ----------------------------------------------------- */
+$('pNeed').textContent = DATA.passNeeded;
+$('pNeedSpeed').textContent = fmt(DATA.passSpeed, 1) + 'x';
+DATA.policies.forEach(p => {
+  const tr = document.createElement('tr');
+  if (p.key === 'P2') tr.style.fontWeight = '600';
+  tr.append(
+    cell(p.label + (p.key === 'P2' ? ' (the headline)' : '')),
+    cell(p.zeroMiss + ' / ' + DATA.nExams, 'num'),
+    cell(p.missDays, 'num'),
+    cell(pct(p.worstRecall), 'num'),
+    cell(fmt(p.meanSent, 1), 'num'),
+    cell(fmt(p.speedup) + 'x', 'num'),
+  );
+  $('pBody').appendChild(tr);
+});
+
+/* ---- timing and accuracy ---------------------------------------------- */
+$('tSolve').textContent = fmt(DATA.timing.solve, 3) + ' s';
+$('tN').textContent = N;
+$('tAll').textContent = fmt(DATA.timing.baseline, 2) + ' s';
+$('tOver').textContent = fmt(DATA.timing.overhead, 3) + ' s';
+
+[['Bus voltage', 'mae_vm_pu', 4, ' pu'],
+ ['Bus angle', 'mae_va_degrees', 2, ' degrees'],
+ ['Branch flow', 'mae_flow_percent_of_rating', 2, '% of rating']].forEach(([label, key, dd, unit]) => {
+  const tr = document.createElement('tr');
+  tr.append(cell(label),
+    cell(fmt(DATA.accuracy.all_cases[key], dd) + unit, 'num'),
+    cell(fmt(DATA.accuracy.dangerous_only[key], dd) + unit, 'num'));
+  $('accBody').appendChild(tr);
+});
+$('accNote').textContent = 'Measured on ' + DATA.accuracyDays + ' held-out days: '
+  + comma(DATA.accuracy.all_cases.n_cases) + ' outage cases, '
+  + comma(DATA.accuracy.dangerous_only.n_cases) + ' of them dangerous.';
+
+$('stamp').textContent = 'Built ' + DATA.generated + ' by demo/make_demo.py from '
+  + 'experiments/results/round2_main_original.json, eval/cache/ and model/weights.npz. '
+  + 'Every exam was refitted and matched the recorded result, and the model was rerun on every day shown.';
+
+drawExam();
+drawDay();
+</script>
+</body>
+</html>

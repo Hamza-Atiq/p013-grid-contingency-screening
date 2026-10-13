@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grid contingency screening</title>
+<style>
+/* ISA-101 style: the field is grey, and colour only ever means something is wrong. */
+:root{
+  --ground:#c2c2ba; --panel:#cdcdc5; --sunk:#b0b0a8;
+  --hi:#deded6; --lo:#93938d;
+  --ink:#1c1e20; --ink2:#4d5053; --ink3:#5f6266;
+  --alarm:#a92419; --warn:#8a5a06; --select:#2f5f80; --ok:#3d5a3d;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,"DejaVu Sans Mono",monospace;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font:15px/1.55 var(--sans)}
+.wrap{max-width:980px;margin:0 auto;padding:24px 16px 60px}
+h1{font-size:23px;margin:0 0 4px;letter-spacing:-.2px}
+h2{font-size:17px;margin:0 0 10px;letter-spacing:-.1px}
+.sub{color:var(--ink2);margin:0 0 22px;font-size:14px}
+.panel{background:var(--panel);border-top:1px solid var(--hi);border-left:1px solid var(--hi);
+  border-right:1px solid var(--lo);border-bottom:1px solid var(--lo);padding:18px;margin:0 0 20px}
+.lead{margin:0 0 12px;font-size:14px;color:var(--ink2)}
+.note{font-size:13px;color:var(--ink3);margin:10px 0 0}
+b.n{font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums}
+.alarm{color:var(--alarm)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--sunk)}
+th{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);font-weight:600}
+td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.scroll{overflow-x:auto}
+
+.readout{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--lo)}
+.cell{background:var(--sunk);padding:11px 13px;min-width:0}
+.cell span{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink2);margin-bottom:5px}
+.cell b.n{font-size:20px}
+.cell.big b.n{font-size:28px}
+.cell small{display:block;font-size:12px;color:var(--ink3);margin-top:3px}
+.verdict{margin-top:14px;padding:11px 13px;background:var(--sunk);font-size:14px;border-left:3px solid var(--select)}
+.verdict.bad{border-left-color:var(--alarm)}
+@media (max-width:760px){.readout{grid-template-columns:repeat(2,1fr)}}
+
+/* the 50 exams */
+.exams{display:flex;align-items:flex-end;gap:2px;height:96px;background:var(--sunk);padding:8px 8px 0}
+.exams button{flex:1 1 0;min-width:0;height:100%;border:0;padding:0;background:transparent;cursor:pointer;
+  display:flex;align-items:flex-end;border-bottom:3px solid transparent}
+.exams button i{display:block;width:100%;background:var(--lo)}
+.exams button.miss i{background:var(--alarm)}
+.exams button[aria-pressed=true]{border-bottom:6px solid var(--ink);background:rgba(47,95,128,.28);
+  outline:2px solid var(--ink);outline-offset:1px}
+.exams button:focus-visible{outline:2px dashed var(--select);outline-offset:3px}
+.axis{display:flex;justify-content:space-between;font:12px var(--mono);color:var(--ink3);padding:4px 8px 0}
+
+/* day picker */
+.tabs{display:flex;flex-wrap:wrap;gap:1px;background:var(--lo);margin-bottom:16px}
+.tabs button{flex:1 1 auto;background:var(--sunk);border:0;color:var(--ink2);font:600 12.5px/1.35 var(--sans);
+  padding:9px 10px;cursor:pointer;text-align:left}
+.tabs button[aria-selected=true]{background:var(--select);color:#f2f2ec}
+.tabs button:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
+tr.dang td{background:rgba(169,36,25,.13)}
+tr.missrow td{background:rgba(169,36,25,.32);font-weight:600}
+tr.notsent td{color:var(--ink3)}
+tr.missrow td{color:var(--ink)}
+tr.line td{border-top:2px dashed var(--ink2)}
+.tag{font:600 10px/1 var(--sans);text-transform:uppercase;letter-spacing:.05em;padding:2px 5px;
+  background:var(--alarm);color:#f2f2ec;border-radius:2px;white-space:nowrap}
+.tag.pin{background:var(--warn)}
+.btn{background:var(--sunk);border:1px solid var(--lo);font:600 13px var(--sans);color:var(--ink);
+  padding:6px 12px;cursor:pointer;margin-top:10px}
+.btn:focus-visible{outline:2px solid var(--select)}
+ul.misses{margin:8px 0 0;padding-left:20px;font-size:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Grid contingency screening: the measured result</h1>
+<p class="sub">
+  A graph neural network ranks every single-branch outage on the
+  <b class="n" id="caseName"></b> grid, and the AC power flow solver checks the
+  cases that need checking. Every number on this page comes from the trained
+  model and the solver, written in when this file was built.
+</p>
+
+<div class="panel">
+  <h2>The honest headline</h2>
+  <p class="lead">
+    Tested on <b class="n" id="hExams"></b> random exams: each time,
+    <b class="n" id="hPrac"></b> practice days to fit the policy and
+    <b class="n" id="hExamDays"></b> unseen exam days to grade it,
+    <b class="n" id="hTotalDays"></b> exam days in total.
+  </p>
+  <div class="readout">
+    <div class="cell big"><span>Speed vs solving all</span><b class="n" id="hSpeed"></b><small>median over the exams</small></div>
+    <div class="cell big"><span>Cases sent to solver</span><b class="n" id="hSent"></b><small id="hSentOf"></small></div>
+    <div class="cell big"><span>Days with a miss</span><b class="n alarm" id="hMiss"></b><small id="hMissRate"></small></div>
+    <div class="cell big"><span>Worst recall</span><b class="n" id="hRecall"></b><small>in any one exam</small></div>
+  </div>
+  <div class="verdict bad" id="hVerdict"></div>
+</div>
+
+<div class="panel">
+  <h2>The 50 exams, one bar each</h2>
+  <p class="lead">
+    Bar height is the number of exam days with at least one dangerous case not
+    sent to the solver. Grey stubs are exams with zero misses. Click a bar (or
+    use the arrow keys on it) to see that exam.
+  </p>
+  <div class="exams" id="exams" role="group" aria-label="Exams"></div>
+  <div class="axis"><span>exam 1</span><span id="axisEnd"></span></div>
+  <p class="note" id="eRepeat"></p>
+  <div class="readout" style="margin-top:14px">
+    <div class="cell"><span>Exam</span><b class="n" id="eNo"></b></div>
+    <div class="cell"><span>Days with a miss</span><b class="n" id="eMiss"></b></div>
+    <div class="cell"><span>Recall</span><b class="n" id="eRecall"></b></div>
+    <div class="cell"><span>Speed vs solving all</span><b class="n" id="eSpeed"></b></div>
+  </div>
+  <div class="verdict" id="eVerdict"></div>
+</div>
+
+<div class="panel">
+  <h2>Look at one day</h2>
+  <p class="lead">
+    The first four days come from one exam (<b class="n" id="fxExam"></b> exam days,
+    policy fitted on <b class="n" id="fxPrac"></b> practice days), the last from an
+    exam where it failed. Rows are the 80 branches in the model's order. Red rows
+    are dangerous by the solver's answer (a danger score above 1.0). On a normal
+    day the dashed line is the cutoff: rows below it are not sent to the solver.
+  </p>
+  <div class="tabs" id="tabs" role="tablist"></div>
+  <div class="readout" style="margin-bottom:4px">
+    <div class="cell"><span>System load</span><b class="n" id="dLoad"></b><small id="dHeavy"></small></div>
+    <div class="cell"><span>Sent to solver</span><b class="n" id="dSent"></b><small id="dPinned"></small></div>
+    <div class="cell"><span>Dangerous (solver)</span><b class="n" id="dDang"></b></div>
+    <div class="cell"><span>Missed</span><b class="n" id="dMissed"></b></div>
+  </div>
+  <div class="verdict" id="dVerdict"></div>
+  <div class="scroll" style="margin-top:14px"><table><thead><tr>
+    <th class="num">#</th><th>Branch</th><th class="num">Model score</th><th>Solver says</th><th>Sent to solver</th>
+  </tr></thead><tbody id="dBody"></tbody></table></div>
+  <button class="btn" id="dMore" type="button"></button>
+</div>
+
+<div class="panel">
+  <h2>The three policies I compared</h2>
+  <p class="lead">
+    Same 50 exams for each. The pass mark, fixed before the test: zero misses on
+    at least <b class="n" id="pNeed"></b> of 50 exams and a median speed of at
+    least <b class="n" id="pNeedSpeed"></b>. No row reaches it.
+  </p>
+  <div class="scroll"><table><thead><tr>
+    <th>Policy</th><th class="num">Zero-miss exams</th><th class="num">Miss days</th>
+    <th class="num">Worst recall</th><th class="num">Cases sent</th><th class="num">Speed</th>
+  </tr></thead><tbody id="pBody"></tbody></table></div>
+  <p class="note">
+    Cases sent and speed are medians over the 50 exams. Miss days are summed
+    over all 50 exams.
+  </p>
+</div>
+
+<div class="panel">
+  <h2>How the speed is counted</h2>
+  <p style="margin:0;font-size:14px">
+    One AC power flow solve takes <b class="n" id="tSolve"></b> on my laptop
+    (median), so solving all <b class="n" id="tN"></b> cases takes
+    <b class="n" id="tAll"></b>. Running the model screen takes
+    <b class="n" id="tOver"></b> (median). A day costs the screen plus one solve per case
+    sent to the solver. Heavy days send all 80, so they pay the screen and gain
+    nothing; the speed comes from normal days.
+  </p>
+</div>
+
+<div class="panel">
+  <h2>How accurate the model is</h2>
+  <div class="scroll"><table><thead><tr>
+    <th>Quantity (mean absolute error)</th><th class="num">All cases</th><th class="num">Dangerous cases only</th>
+  </tr></thead><tbody id="accBody"></tbody></table></div>
+  <p class="note" id="accNote"></p>
+</div>
+
+<p class="note" id="stamp"></p>
+
+</div>
+<script>
+const DATA = /*DATA*/;
+
+const $ = id => document.getElementById(id);
+const fmt = (x, d = 2) => Number(x).toFixed(d);
+const pct = (x, d = 2) => (100 * x).toFixed(d) + '%';
+const N = DATA.n;
+const H = DATA.headline;
+const totalDays = DATA.nExams * DATA.nExamDays;
+const comma = x => x.toLocaleString('en-US');
+
+/* ---- headline --------------------------------------------------------- */
+$('caseName').textContent = 'IEEE 57-bus (' + DATA.case + ')';
+$('hExams').textContent = DATA.nExams;
+$('hPrac').textContent = DATA.nPractice;
+$('hExamDays').textContent = DATA.nExamDays;
+$('hTotalDays').textContent = comma(totalDays);
+$('hSpeed').textContent = fmt(H.speedup) + 'x';
+$('hSent').textContent = fmt(H.meanSent, 1);
+$('hSentOf').textContent = 'of ' + N + ' per day, median exam';
+$('hMiss').textContent = H.missDays + ' of ' + comma(totalDays);
+$('hMissRate').textContent = 'about 1 day in ' + Math.round(totalDays / H.missDays);
+$('hRecall').textContent = pct(H.worstRecall);
+$('hVerdict').innerHTML = '';
+$('hVerdict').append(
+  'The pass mark I set in advance was not reached. I wanted zero misses on at least '
+  + DATA.passNeeded + ' of ' + DATA.nExams + ' exams and got ' + H.zeroMiss
+  + '. With the selection rule exactly as I first registered it the result was worse, '
+  + H.registeredZeroMiss + ' of ' + DATA.nExams
+  + '. So this tool cannot promise that it never misses. What it can state is the measured miss rate above.');
+
+/* ---- the 50 exams ----------------------------------------------------- */
+const maxMiss = Math.max(1, ...DATA.exams.map(e => e.missDays));
+let activeExam = DATA.exams.findIndex(e => e.missDays > 0);
+if (activeExam < 0) activeExam = 0;
+$('axisEnd').textContent = 'exam ' + DATA.nExams;
+$('eRepeat').textContent = 'Every exam is a new random split of the same ' + comma(DATA.poolDays)
+  + ' days, so one hard day can land in several exams. The ' + H.missDays + ' miss days are '
+  + 'only ' + DATA.distinctMissDays + ' different days: a hard day counts once for every exam it is missed in.';
+DATA.exams.forEach((e, i) => {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = e.missDays ? 'miss' : '';
+  b.setAttribute('aria-label', 'Exam ' + e.no + ': ' + e.missDays + ' day(s) with a miss');
+  b.title = 'Exam ' + e.no + ': ' + e.missDays + ' day(s) with a miss';
+  const bar = document.createElement('i');
+  bar.style.height = e.missDays ? (100 * e.missDays / maxMiss) + '%' : '6px';
+  b.appendChild(bar);
+  b.onclick = () => { activeExam = i; drawExam(); };
+  b.onkeydown = ev => {
+    const step = ev.key === 'ArrowRight' ? 1 : ev.key === 'ArrowLeft' ? -1 : 0;
+    if (!step) return;
+    ev.preventDefault();
+    activeExam = (i + step + DATA.exams.length) % DATA.exams.length;
+    drawExam();
+    $('exams').children[activeExam].focus();
+  };
+  $('exams').appendChild(b);
+});
+
+function drawExam() {
+  const e = DATA.exams[activeExam];
+  [...$('exams').children].forEach((c, j) => c.setAttribute('aria-pressed', j === activeExam));
+  $('eNo').textContent = e.no + ' of ' + DATA.nExams;
+  $('eMiss').textContent = e.missDays + ' of ' + DATA.nExamDays;
+  $('eMiss').className = 'n' + (e.missDays ? ' alarm' : '');
+  $('eRecall').textContent = pct(e.recall);
+  $('eSpeed').textContent = fmt(e.speedup) + 'x';
+  const v = $('eVerdict');
+  v.textContent = '';
+  const intro = document.createElement('div');
+  intro.textContent = 'Fitted on practice: heavy-day threshold ' + comma(e.L) + ' MW ('
+    + e.percentile + 'th percentile of practice load), normal-day cutoff '
+    + fmt(e.cutoff, 3) + '. On average ' + fmt(e.meanSent, 1) + ' of ' + N
+    + ' cases sent per day.';
+  v.appendChild(intro);
+  if (!e.missDays) {
+    v.className = 'verdict';
+    const ok = document.createElement('div');
+    ok.style.marginTop = '6px';
+    ok.textContent = 'Every dangerous case on all ' + DATA.nExamDays + ' exam days was sent to the solver.';
+    v.appendChild(ok);
+  } else {
+    v.className = 'verdict bad';
+    const ul = document.createElement('ul');
+    ul.className = 'misses';
+    e.misses.forEach(m => {
+      const li = document.createElement('li');
+      li.textContent = 'A normal day at ' + comma(m.loadMw) + ' MW: missed '
+        + m.branches.map((b, k) => b + ' (model score ' + fmt(m.scores[k], 3) + ')').join(', ')
+        + ', below the cutoff of ' + fmt(e.cutoff, 3) + '.';
+      ul.appendChild(li);
+    });
+    v.appendChild(ul);
+  }
+}
+
+/* ---- one day ---------------------------------------------------------- */
+let activeDay = 0, showAll = false;
+$('fxExam').textContent = DATA.fixedExam.exam;
+$('fxPrac').textContent = DATA.fixedExam.practice;
+DATA.days.forEach((d, i) => {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.setAttribute('role', 'tab');
+  b.textContent = d.label;
+  b.onclick = () => { activeDay = i; showAll = false; drawDay(); };
+  $('tabs').appendChild(b);
+});
+
+function cell(content, cls) {
+  const td = document.createElement('td');
+  if (cls) td.className = cls;
+  if (content instanceof Node) td.appendChild(content); else td.textContent = content;
+  return td;
+}
+function tag(text, cls) {
+  const s = document.createElement('span');
+  s.className = 'tag' + (cls ? ' ' + cls : '');
+  s.textContent = text;
+  return s;
+}
+
+function drawDay() {
+  const d = DATA.days[activeDay];
+  [...$('tabs').children].forEach((c, j) => c.setAttribute('aria-selected', j === activeDay));
+  $('dLoad').textContent = comma(d.loadMw) + ' MW';
+  $('dHeavy').textContent = (d.heavy ? 'heavy: at or above ' : 'normal: below ') + comma(d.L) + ' MW';
+  $('dSent').textContent = d.nSent + ' of ' + N;
+  $('dPinned').textContent = d.nPinned ? d.nPinned + ' of them split the grid or have no solution' : '';
+  $('dDang').textContent = d.nDangerous + ' of ' + N;
+  $('dMissed').textContent = d.missed.length ? d.missed.join(', ') : 'none';
+  $('dMissed').className = 'n' + (d.missed.length ? ' alarm' : '');
+
+  const v = $('dVerdict');
+  if (d.heavy) {
+    v.className = 'verdict';
+    v.textContent = 'Heavy day, so all ' + N + ' cases go to the solver. Nothing can be missed, and nothing is saved.';
+  } else if (d.missed.length) {
+    v.className = 'verdict bad';
+    v.textContent = 'Normal day with cutoff ' + fmt(d.cutoff, 3) + '. The model scored '
+      + d.missed.join(', ') + ' below the cutoff, so it was never sent to the solver, but the solver says it is dangerous. '
+      + 'This is one of the ' + H.missDays + ' miss days.';
+  } else {
+    v.className = 'verdict';
+    v.textContent = 'Normal day: every case scoring ' + fmt(d.cutoff, 3)
+      + ' or more is sent, plus any case that splits the grid or has no solution. All '
+      + d.nDangerous + ' dangerous cases were sent.';
+  }
+
+  const tb = $('dBody'); tb.textContent = '';
+  const lastSent = d.rows.reduce((m, r, i) => r.sent ? i : m, -1);
+  const extra = d.rows.findIndex((r, i) => i > lastSent && r.dangerous);
+  let limit = Math.max(lastSent + 6, extra + 1, 20);
+  if (showAll) limit = d.rows.length;
+  limit = Math.min(limit, d.rows.length);
+  d.rows.slice(0, limit).forEach((r, i) => {
+    const tr = document.createElement('tr');
+    const miss = r.dangerous && !r.sent;
+    tr.className = [miss ? 'missrow' : r.dangerous ? 'dang' : '', r.sent ? '' : 'notsent',
+      !d.heavy && i === lastSent + 1 ? 'line' : ''].join(' ').trim();
+    const name = document.createDocumentFragment();
+    name.append(r.name + ' ');
+    if (r.pinned) name.appendChild(tag('splits grid / no solution', 'pin'));
+    tr.append(
+      cell(i + 1, 'num'),
+      cell(name),
+      cell(r.score === null ? 'n/a' : fmt(r.score, 3), 'num'),
+      cell(r.dangerous ? tag('dangerous') : 'safe'),
+      cell(r.sent ? 'yes' : miss ? 'NO, missed' : 'no'),
+    );
+    tb.appendChild(tr);
+  });
+  $('dMore').textContent = showAll ? 'Show fewer rows' : 'Show all ' + N + ' branches';
+  $('dMore').hidden = !showAll && limit >= d.rows.length;
+}
+$('dMore').onclick = () => { showAll = !showAll; drawDay(); };
+
+/* ---- policy table ----------------------------------------------------- */
+$('pNeed').textContent = DATA.passNeeded;
+$('pNeedSpeed').textContent = fmt(DATA.passSpeed, 1) + 'x';
+DATA.policies.forEach(p => {
+  const tr = document.createElement('tr');
+  if (p.key === 'P2') tr.style.fontWeight = '600';
+  tr.append(
+    cell(p.label + (p.key === 'P2' ? ' (the headline)' : '')),
+    cell(p.zeroMiss + ' / ' + DATA.nExams, 'num'),
+    cell(p.missDays, 'num'),
+    cell(pct(p.worstRecall), 'num'),
+    cell(fmt(p.meanSent, 1), 'num'),
+    cell(fmt(p.speedup) + 'x', 'num'),
+  );
+  $('pBody').appendChild(tr);
+});
+
+/* ---- timing and accuracy ---------------------------------------------- */
+$('tSolve').textContent = fmt(DATA.timing.solve, 3) + ' s';
+$('tN').textContent = N;
+$('tAll').textContent = fmt(DATA.timing.baseline, 2) + ' s';
+$('tOver').textContent = fmt(DATA.timing.overhead, 3) + ' s';
+
+[['Bus voltage', 'mae_vm_pu', 4, ' pu'],
+ ['Bus angle', 'mae_va_degrees', 2, ' degrees'],
+ ['Branch flow', 'mae_flow_percent_of_rating', 2, '% of rating']].forEach(([label, key, dd, unit]) => {
+  const tr = document.createElement('tr');
+  tr.append(cell(label),
+    cell(fmt(DATA.accuracy.all_cases[key], dd) + unit, 'num'),
+    cell(fmt(DATA.accuracy.dangerous_only[key], dd) + unit, 'num'));
+  $('accBody').appendChild(tr);
+});
+$('accNote').textContent = 'Measured on ' + DATA.accuracyDays + ' held-out days: '
+  + comma(DATA.accuracy.all_cases.n_cases) + ' outage cases, '
+  + comma(DATA.accuracy.dangerous_only.n_cases) + ' of them dangerous.';
+
+$('stamp').textContent = 'Built ' + DATA.generated + ' by demo/make_demo.py from '
+  + 'experiments/results/round2_main_original.json, eval/cache/ and model/weights.npz. '
+  + 'Every exam was refitted and matched the recorded result, and the model was rerun on every day shown.';
+
+drawExam();
+drawDay();
+</script>
+</body>
+</html>

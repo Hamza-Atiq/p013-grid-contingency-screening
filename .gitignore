@@ -1,0 +1,25 @@
+# Generated data: regenerate with `python -m p013.generate` (see README).
+data/
+eval/cache/
+
+# Python environments and caches
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# Logs from long runs
+*.log
+
+# Download metadata written by `hf download --local-dir .`
+.cache/
+
+# Build notes
+.superpowers/
+# Assembled Hugging Face Space (space/build_space.py)
+space/_build/

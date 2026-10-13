@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "p013"
+version = "0.1.0"
+description = "Fast N-1 contingency screening with a learned power flow model"
+requires-python = ">=3.11"
+
+# Dependencies are pinned in requirements.txt, which is the file the project
+# actually installs from. They are repeated loosely here only so the package
+# metadata is not misleading.
+dependencies = [
+    "pandapower>=3.5,<4",
+    "numpy>=2,<3",
+    "numba>=0.67",
+    "torch>=2",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# Installed editable (`pip install -e .`) so `python -m p013.generate` works
+# from any directory. Relying on a PYTHONPATH prefix meant the module was
+# importable under pytest and nowhere else, which is how the first full
+# generation run failed.
