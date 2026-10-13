@@ -67,7 +67,8 @@ Move the load slider, change the seed (each seed is a different day), and press
 
 LAUNCH = """# 3. The interactive app, inline.
 if not os.environ.get("P013_NO_LAUNCH"):
-    app.build().queue(default_concurrency_limit=1).launch()"""
+    # Tall enough to show the summary and the table without scrolling inside a small box.
+    app.build().queue(default_concurrency_limit=1).launch(height=1100)"""
 
 
 def main() -> None:

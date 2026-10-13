@@ -15,7 +15,7 @@ measure nothing at all.
 2026-09-10 amendment below fixed the constant floor but left the trigger
 infinitely sensitive: *any* deterioration counted, so a bus easing from 0.9370
 to 0.9369 was a violation. Measured on the shipped case, that made **78 of 80
-contingencies dangerous and k\* the entire list** - the headline was
+contingencies dangerous and k* the entire list** - the headline was
 unreachable before the model was ever consulted. The deteriorations span five
 orders of magnitude, from 1e-5 pu to 0.36 pu, and a yes/no test at zero cannot
 tell those apart. The *score* always could: its voltage term runs from 6.88

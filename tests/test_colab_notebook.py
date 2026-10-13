@@ -44,3 +44,10 @@ def test_notebook_does_not_overstate_score_differences():
 
     text = "\n".join(c.source for c in nbformat.read(NB, as_version=4).cells)
     assert "does not depend on that" not in text
+
+
+def test_inline_app_is_tall_enough_to_read():
+    import nbformat
+
+    code = "\n".join(c.source for c in nbformat.read(NB, as_version=4).cells if c.cell_type == "code")
+    assert "launch(height=" in code
