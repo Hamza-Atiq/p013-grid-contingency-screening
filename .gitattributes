@@ -1,0 +1,2 @@
+# The grid case file is vendored data, not project code.
+cases/*.m linguist-vendored

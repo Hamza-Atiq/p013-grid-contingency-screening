@@ -283,10 +283,10 @@ $("honest").innerHTML = [
   "But over <b>" + hb.nExams + " reshuffled tests</b> my pass mark was <b>not reached</b>: zero misses on " + hb.zeroMiss +
     " of " + hb.nExams + " tests, and I needed " + hb.passNeeded + ". Those " + hb.missDays + " miss-days are only <b>" +
     hb.distinctMissDays + " different days</b>, listed under \"Days it missed\".",
-  "I show policy P2 because it did best. The selection rule I registered in advance picked a different policy, which reached " +
+  "I show the screening rule that did best (called P2 in the code). The rule I registered in advance picked a different one, which reached " +
     hb.registeredZeroMiss + " of " + hb.nExams + ".",
   "One grid (IEEE 57-bus), synthetic operating days, single line failures only.",
-  "Next, with supervision: every miss is a voltage drop the model under-predicts on a few specific lines. I would study why, and fix it."
+  "What I would do next: every miss is a voltage drop the model under-predicts on a few specific lines. I would study why, and fix it."
 ].map(s => "<li>" + s + "</li>").join("");
 $("links").innerHTML =
   "<a href='" + D.links.live + "'>Run it live<small>Google Colab: real model and solver on a new day. Press Run all; about a minute.</small></a>" +
