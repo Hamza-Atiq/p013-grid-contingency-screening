@@ -60,9 +60,12 @@ about every part, all the time.
    covers all 80 failures. It predicts the voltage at every bus, and line flows
    are computed from those voltages.
 3. **A danger score.** A case is dangerous if any line carries more than 100%
-   of its rating, or any bus voltage is outside 0.95 to 1.05 per unit and worse
-   than before the failure. The same check runs on the AI's predicted voltages
-   and flows, and gives each of the 80 cases a danger score.
+   of its rating, or any bus voltage ends up more than 0.05 per unit further
+   outside the 0.95 to 1.05 range than it was before the failure. (Five buses
+   already sit slightly outside that range with nothing wrong, so the voltage
+   check counts how much worse a failure makes things.) The same check runs on
+   the AI's predicted voltages and flows, and gives each of the 80 cases a
+   danger score.
 4. **The screening rule.** On heavy-load days, all 80 cases go to the solver.
    On normal days, every case whose score is at or above a learned cutoff goes
    to the solver. Both the heavy-day line and the cutoff are learned only from
